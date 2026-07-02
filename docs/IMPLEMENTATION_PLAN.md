@@ -190,14 +190,56 @@
 
 ## Этап 7. Релиз
 
-1. Перед релизом выполнить:
+Цель этапа: выпустить первый публичный GitHub release/tag. `npm publish` не выполнять, пока в `package.json` остается `"private": true` и нет явного решения о публикации в npm.
+
+1. Заморозить релиз:
+   - убедиться, что этапы 1-6 завершены и влиты;
+   - проверить `git status`;
+   - сверить `version` в `package.json` и версию MCP server metadata в `src/index.ts`;
+   - выбрать tag name, например `v1.0.0`.
+2. Перед релизом выполнить локальные проверки:
+   - `npm ci`;
    - `npm test`;
    - `npm run build`;
-   - `npm pack --dry-run`;
-   - clean install smoke test.
-2. Проверить GitHub Actions CI.
-3. Зафиксировать changelog/release notes.
-4. Создать git tag первого публичного релиза.
-5. После релиза проверить MCP config из README на чистой машине или во временной директории.
+   - `npm pack --dry-run`.
+3. Проверить содержимое npm package dry-run:
+   - в пакет попадают `dist/`, `docs/REFERENCE.md`, `README.md`, `LICENSE`, `package.json`;
+   - в пакет не попадают `node_modules/`, `.env*`, `tests/fixtures`, `src/`, IDE/agent-specific файлы.
+4. Выполнить clean install smoke test во временной директории:
+   - установить и запустить пакет через GitHub/npx из README;
+   - проверить MCP `initialize`;
+   - проверить `tools/list`;
+   - вызвать `list_components` на тестовом или реальном React-проекте.
+5. Проверить GitHub Actions CI:
+   - запушить финальный commit в release branch/main;
+   - дождаться зеленого workflow;
+   - убедиться, что CI выполнил `npm ci`, `npm test`, `npm run build`.
+6. Зафиксировать changelog/release notes на английском языке:
+   - пример структуры:
 
-Готово, когда tag создан, CI зеленый, README config воспроизводимо запускает MCP-сервер.
+```markdown
+## v1.0.0
+
+Initial public release of `react-inspector-mcp`.
+
+### Added
+- GitHub/npx startup flow for MCP clients.
+- React component discovery with props, JSDoc metadata, usages, unused component detection, dependencies, and dependents.
+- TypeScript-aware component scanning powered by `ts-morph`.
+- Support for path aliases, barrels, re-exports, lazy imports, and supported React wrappers.
+- Realistic React fixture coverage for components, pages, app routes, stories/tests, scan filters, and default excludes.
+
+### Notes
+- Requires Node.js 20+.
+- npm publishing is not enabled yet; install from GitHub.
+```
+
+7. Создать git tag первого публичного релиза:
+   - создать tag, например `v1.0.0`;
+   - запушить tag в GitHub;
+   - создать GitHub Release из этого tag и вставить release notes.
+8. После релиза проверить README MCP config на чистой машине или во временной директории:
+   - проверить запуск через `npx -y github:vgratsilev/react-inspector-mcp#v1.0.0`;
+   - повторить MCP smoke test: `initialize`, `tools/list`, `list_components`.
+
+Готово, когда tag создан, CI зеленый, release notes опубликованы на английском языке, README config воспроизводимо запускает MCP-сервер из чистой установки.
