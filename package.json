@@ -11,13 +11,19 @@
     "private": true,
     "keywords": [
         "mcp",
+        "mcp-server",
         "react",
+        "react-components",
         "typescript",
         "ts-morph",
         "components"
     ],
-    "author": "",
+    "author": "Vadim Gratsilev",
     "license": "ISC",
+    "homepage": "https://github.com/vgratsilev/react-inspector-mcp#readme",
+    "bugs": {
+        "url": "https://github.com/vgratsilev/react-inspector-mcp/issues"
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/vgratsilev/react-inspector-mcp.git"

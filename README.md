@@ -11,6 +11,8 @@ It helps find React components, read props and metadata, locate JSX usages, dete
 
 ## Installation
 
+For a local checkout:
+
 ```bash
 git clone https://github.com/vgratsilev/react-inspector-mcp.git
 cd react-inspector-mcp
@@ -20,7 +22,9 @@ npm run build
 
 ## MCP Client Configuration
 
-Use the compiled server for normal MCP client configuration:
+### Production
+
+Use the compiled server from a local checkout:
 
 ```json
 {
@@ -35,7 +39,9 @@ Use the compiled server for normal MCP client configuration:
 }
 ```
 
-For local development:
+### Development
+
+Use the TypeScript entrypoint while working on this server:
 
 ```json
 {
@@ -53,11 +59,16 @@ For local development:
 
 On Windows, escaped backslashes in JSON configs are also valid.
 
-After connecting the server, pass the target React project path to tools:
+## Tool Call Example
+
+After connecting the server, pass the target React project path in tool arguments:
 
 ```json
 {
-  "projectPath": "C:/absolute/path/to/target-react-project"
+  "tool": "list_components",
+  "arguments": {
+    "projectPath": "C:/absolute/path/to/target-react-project"
+  }
 }
 ```
 
@@ -86,15 +97,6 @@ npm test
 - `npm run build` compiles TypeScript into `dist`.
 - `npm start` starts the compiled MCP server from `dist/index.js`.
 - `npm test` runs fixture-based tool tests.
-
-## Transport
-
-The server uses stdio transport:
-
-```ts
-const transport = new StdioServerTransport();
-await server.connect(transport);
-```
 
 ## Project Docs
 

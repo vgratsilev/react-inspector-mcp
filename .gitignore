@@ -5,6 +5,7 @@ dist/
 .kilo/
 .vscode/
 .agents/
+.codex/
 
 *.log
 .env
