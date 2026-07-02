@@ -97,7 +97,7 @@ function formatError(error: unknown): string {
 
 const server = new Server(
     {
-        name: "react-project-mcp",
+        name: "react-inspector-mcp",
         version: "1.0.0",
     },
     {

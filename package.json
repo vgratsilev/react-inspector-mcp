@@ -1,5 +1,5 @@
 {
-    "name": "react-project-mcp",
+    "name": "react-inspector-mcp",
     "version": "1.0.0",
     "type": "module",
     "scripts": {
@@ -18,6 +18,10 @@
     ],
     "author": "",
     "license": "ISC",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/vgratsilev/react-inspector-mcp.git"
+    },
     "engines": {
         "node": ">=20"
     },

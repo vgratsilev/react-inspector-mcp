@@ -1,5 +1,7 @@
 # Roadmap
 
+See [README](../README.md) for setup and [tool reference](REFERENCE.md) for detailed tool behavior.
+
 ## Current Status
 
 - MCP server for React/TypeScript project inspection is implemented.
@@ -10,16 +12,26 @@
 
 ## Nearest Steps
 
-- Configure the GitHub repository remote for the project.
 - Update package metadata before public publishing:
   - `author`
-  - `repository`
   - package visibility decision for `"private": true`
 - Review README installation and MCP client configuration sections.
 - Run final checks before release:
   - `npm test`
   - `npm run build`
+- Review `git status` before the first public commit.
 - Create the first public release or git tag after CI passes.
+
+## Before Publishing
+
+- Keep `README.md` focused on setup and quick usage.
+- Keep detailed tool behavior in `docs/REFERENCE.md`.
+- Ensure `LICENSE` matches `package.json`.
+- Make sure generated files are not committed:
+  - `dist/`
+  - `node_modules/`
+  - local `.env*` files
+- Keep GitHub Actions CI green.
 
 ## Next Milestone
 
