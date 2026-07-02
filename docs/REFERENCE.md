@@ -6,7 +6,7 @@ Detailed reference for `react-inspector-mcp` tools, inputs, response shapes, sca
 
 Requires Node.js 20+.
 
-Production MCP config from GitHub through `npx`:
+Production MCP config through `npx`:
 
 ```json
 {
@@ -15,7 +15,7 @@ Production MCP config from GitHub through `npx`:
       "command": "npx",
       "args": [
         "-y",
-        "github:vgratsilev/react-inspector-mcp"
+        "react-inspector-mcp"
       ]
     }
   }
