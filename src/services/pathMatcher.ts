@@ -41,7 +41,17 @@ function globToRegex(glob: string): RegExp {
 }
 
 function matchesAny(relativePath: string, globs: string[]): boolean {
-    return globs.some(glob => globToRegex(glob).test(relativePath));
+    return globs.some(glob => {
+        if (globToRegex(glob).test(relativePath)) {
+            return true;
+        }
+
+        if (!glob.startsWith("**/")) {
+            return false;
+        }
+
+        return globToRegex(glob.slice(3)).test(relativePath);
+    });
 }
 
 export function shouldIncludeFile(

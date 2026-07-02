@@ -12,12 +12,17 @@ import {
     listComponents,
     searchComponents,
 } from "../src/tools/searchComponents.js";
+import { shouldIncludeFile } from "../src/services/pathMatcher.js";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const fixturePath = resolve(testDir, "fixtures/react-project");
 
 function normalizePath(value: string): string {
     return value.replace(/\\/g, "/");
+}
+
+function sortedNames(values: Array<{ name: string }>): string[] {
+    return values.map(value => value.name).sort();
 }
 
 test("lists detected React components with props and metadata", async () => {
@@ -42,6 +47,40 @@ test("lists detected React components with props and metadata", async () => {
             { name: "variant", optional: false },
         ]
     );
+});
+
+test("lists app route components with props and JSDoc metadata", async () => {
+    const components = await listComponents(fixturePath);
+    const names = sortedNames(components);
+    const appShell = components.find(component =>
+        component.name === "AppShell"
+    );
+    const rootLayout = components.find(component =>
+        component.name === "RootLayout"
+    );
+    const appHomePage = components.find(component =>
+        component.name === "AppHomePage"
+    );
+
+    assert.ok(names.includes("AppShell"));
+    assert.ok(names.includes("RootLayout"));
+    assert.ok(names.includes("AppHomePage"));
+    assert.ok(names.includes("DashboardPage"));
+    assert.ok(appShell);
+    assert.equal(appShell.description, "Application shell used by app routes.");
+    assert.ok(normalizePath(appShell.path).endsWith("src/app/layout.tsx"));
+    assert.deepEqual(
+        appShell.props.map(prop => ({
+            name: prop.name,
+            optional: prop.optional,
+        })),
+        [
+            { name: "title", optional: false },
+            { name: "compact", optional: true },
+        ]
+    );
+    assert.equal(rootLayout?.defaultExport, true);
+    assert.ok(normalizePath(appHomePage?.path ?? "").endsWith("src/app/page.tsx"));
 });
 
 test("detects wrapped memo, forwardRef, and lazy components", async () => {
@@ -110,6 +149,15 @@ test("searches components by prop name", async () => {
     );
 });
 
+test("searches components by JSDoc description", async () => {
+    const components = await searchComponents(fixturePath, "application shell");
+
+    assert.deepEqual(
+        components.map(component => component.name),
+        ["AppShell"]
+    );
+});
+
 test("finds only JSX usages outside the declaration file", async () => {
     const usage = await findComponentUsages(fixturePath, "Button");
 
@@ -117,8 +165,8 @@ test("finds only JSX usages outside the declaration file", async () => {
         assert.fail(usage.message);
     }
 
-    assert.equal(usage.usageCount, 3);
-    assert.equal(usage.usedIn.length, 3);
+    assert.equal(usage.usageCount, 4);
+    assert.equal(usage.usedIn.length, 4);
     assert.ok(usage.usedIn.every(location => location.kind === "jsx"));
     assert.ok(
         usage.usedIn.some(location =>
@@ -130,13 +178,19 @@ test("finds only JSX usages outside the declaration file", async () => {
             location.filePath.endsWith("src/components/Dashboard.tsx")
         )
     );
+    assert.ok(
+        usage.usedIn.some(location =>
+            normalizePath(location.filePath).endsWith("src/app/page.tsx")
+        )
+    );
     assert.deepEqual(
-        usage.usedIn.map(location => location.text),
+        usage.usedIn.map(location => location.text).sort(),
         [
+            '<Btn title="Cancel" disabled={false} variant="secondary">',
             '<Button title="Open" variant="primary" />',
+            '<Button title="Launch" variant="primary" />',
             '<Btn title="Save" variant="primary" />',
-            '<Btn title="Cancel" disabled={false} variant="secondary">'
-        ]
+        ].sort()
     );
 });
 
@@ -148,7 +202,7 @@ test("gets one component with usages by exact name", async () => {
     }
 
     assert.equal(component.name, "Button");
-    assert.equal(component.usageCount, 3);
+    assert.equal(component.usageCount, 4);
 });
 
 test("returns a readable response for unknown component usage lookup", async () => {
@@ -166,12 +220,20 @@ test("finds components without external JSX usages", async () => {
     const components = await findUnusedComponents(fixturePath);
     const names = components.map(component => component.name).sort();
     const unused = components.find(component => component.name === "Unused");
+    const defaultPanel = components.find(component =>
+        component.name === "DefaultPanel"
+    );
+    const layoutWatermark = components.find(component =>
+        component.name === "LayoutWatermark"
+    );
 
     assert.ok(names.includes("Unused"));
     assert.ok(names.includes("LocalOnly"));
     assert.ok(!names.includes("Button"));
     assert.equal(unused?.reason, "no_external_jsx_usages");
     assert.equal(unused?.risk, "medium");
+    assert.equal(defaultPanel?.risk, "low");
+    assert.equal(layoutWatermark?.risk, "high");
 });
 
 test("returns component dependencies", async () => {
@@ -285,6 +347,37 @@ test("resolves dependencies by symbol for same-name components", async () => {
     );
 });
 
+test("resolves app dependencies through aliases and feature barrels", async () => {
+    const result = await getComponentDependencies(
+        fixturePath,
+        "AppHomePage"
+    );
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    const cardDependencies = result.dependencies.filter(
+        dependency => dependency.name === "Card"
+    );
+
+    assert.deepEqual(
+        result.dependencies.map(dependency => dependency.name).sort(),
+        ["Button", "Card", "Card", "ForwardInput"]
+    );
+    assert.equal(cardDependencies.length, 2);
+    assert.ok(
+        cardDependencies.some(dependency =>
+            normalizePath(dependency.path).endsWith("src/feature-a/Card.tsx")
+        )
+    );
+    assert.ok(
+        cardDependencies.some(dependency =>
+            normalizePath(dependency.path).endsWith("src/feature-b/Card.tsx")
+        )
+    );
+});
+
 test("returns component dependents", async () => {
     const result = await getComponentDependents(fixturePath, "MemoBadge");
 
@@ -293,9 +386,23 @@ test("returns component dependents", async () => {
     }
 
     assert.deepEqual(
-        result.dependents.map(dependent => dependent.name),
-        ["Dashboard"]
+        sortedNames(result.dependents),
+        ["AppShell", "Dashboard"]
     );
+});
+
+test("returns app dependents for shared components", async () => {
+    const result = await getComponentDependents(fixturePath, "Button");
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    const names = sortedNames(result.dependents);
+
+    assert.ok(names.includes("AppHomePage"));
+    assert.ok(names.includes("Dashboard"));
+    assert.ok(names.includes("Home"));
 });
 
 test("returns lazy import dependents", async () => {
@@ -369,4 +476,72 @@ test("supports include and exclude scan options", async () => {
     assert.ok(names.includes("Button"));
     assert.ok(!names.includes("Unused"));
     assert.ok(!names.includes("Home"));
+});
+
+test("supports src include patterns across components, pages, and app", async () => {
+    const components = await listComponents(fixturePath, {
+        include: ["src/**/*.tsx"],
+        exclude: ["**/*.stories.tsx", "**/*.test.tsx", "**/*.spec.tsx"],
+    });
+    const names = sortedNames(components);
+
+    assert.ok(names.includes("Button"));
+    assert.ok(names.includes("Home"));
+    assert.ok(names.includes("AppShell"));
+    assert.ok(names.includes("AppHomePage"));
+    assert.ok(!names.includes("FilterTargetStory"));
+    assert.ok(!names.includes("FilterTargetTestHarness"));
+});
+
+test("excludes story and test usages when requested", async () => {
+    const defaultUsage = await findComponentUsages(
+        fixturePath,
+        "FilterTarget"
+    );
+    const filteredUsage = await findComponentUsages(
+        fixturePath,
+        "FilterTarget",
+        {
+            exclude: ["**/*.stories.tsx", "**/*.test.tsx", "**/*.spec.tsx"],
+        }
+    );
+
+    if ("found" in defaultUsage) {
+        assert.fail(defaultUsage.message);
+    }
+
+    if ("found" in filteredUsage) {
+        assert.fail(filteredUsage.message);
+    }
+
+    assert.equal(defaultUsage.usageCount, 2);
+    assert.deepEqual(
+        defaultUsage.usedIn.map(location => location.text).sort(),
+        ['<FilterTarget mode="story" />', '<FilterTarget mode="test" />']
+    );
+    assert.equal(filteredUsage.usageCount, 0);
+    assert.deepEqual(filteredUsage.usedIn, []);
+});
+
+test("applies default scan excludes", async () => {
+    const components = await listComponents(fixturePath);
+    const names = sortedNames(components);
+
+    assert.ok(!names.includes("IgnoredStorybookComponent"));
+});
+
+test("matches default exclude paths", () => {
+    const cases = [
+        "node_modules/package/Button.tsx",
+        "dist/IgnoredDistComponent.tsx",
+        ".next/generated/IgnoredNextComponent.tsx",
+        "storybook-static/IgnoredStorybookComponent.tsx",
+    ];
+
+    for (const relativePath of cases) {
+        assert.equal(
+            shouldIncludeFile(fixturePath, resolve(fixturePath, relativePath)),
+            false
+        );
+    }
 });

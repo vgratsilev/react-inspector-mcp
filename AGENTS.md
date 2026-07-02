@@ -25,6 +25,7 @@ npm run build
 - Write code in TypeScript with ESM imports.
 - Use `zod` for external input validation.
 - Prefer `ts-morph` for TypeScript/React analysis instead of regex parsing.
+- In PowerShell, read Markdown and other text files explicitly as UTF-8: `Get-Content -Encoding UTF8 <path>`.
 - Cover new scanner behavior with fixture tests in `tests/fixtures/react-project`.
 - Update `docs/REFERENCE.md` when MCP tool behavior changes.
 - Keep `README.md` focused on setup and quick usage. Keep detailed tool behavior in `docs/REFERENCE.md`.

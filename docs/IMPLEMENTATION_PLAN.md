@@ -140,25 +140,53 @@
 
 ## Этап 6. Реальные fixture-сценарии
 
-1. Добавить fixtures для распространенных структур:
-   - `src/components`;
-   - `src/pages`;
-   - `src/app`;
-   - path aliases из `tsconfig.json`;
-   - index barrels.
-2. Покрыть scan filters:
-   - include только `src/**/*.tsx`;
-   - exclude stories/tests;
-   - default excludes.
-3. Добавить regression tests для:
-   - props extraction;
-   - JSDoc;
-   - usage count;
-   - unused risk;
-   - dependencies/dependents.
-4. Проверить скорость тестов и отсутствие flaky cases.
+Цель этапа: превратить `tests/fixtures/react-project` из набора отдельных кейсов в небольшой реалистичный React-проект, который защищает основные сценарии scanner на структурах, похожих на реальные приложения.
 
-Готово, когда fixtures ближе к реальным React-проектам и защищают основные сценарии scanner.
+1. Зафиксировать текущую карту fixtures:
+   - описать, какие сценарии уже покрыты в `src/components`, `src/pages`, `src/feature-a`, `src/feature-b` и `tsconfig.json`;
+   - не дублировать существующие проверки для aliases, barrels, same-name components, lazy imports и HOC;
+   - выбрать недостающие сценарии: `src/app`, stories/tests, default excludes, более реалистичные композиции страниц.
+2. Добавить app-router-like fixtures в `tests/fixtures/react-project/src/app`:
+   - `layout.tsx` с JSX, импортом shared components и локальным wrapper-компонентом;
+   - `page.tsx` с импортами из `@ui`, `src/components/index.ts` и feature barrels;
+   - вложенный route, например `dashboard/page.tsx`, который использует компоненты из `src/components` и feature модулей;
+   - проверить, что lowercase route-файлы не мешают находить uppercase component declarations внутри них.
+3. Расширить fixtures для типичных служебных файлов:
+   - добавить `Button.stories.tsx` с JSX usages, которые должны исключаться при явном exclude;
+   - добавить `Button.test.tsx` или `Dashboard.spec.tsx` с JSX usages, которые должны исключаться при явном exclude;
+   - добавить файл внутри `dist/`, `.next/` или `storybook-static/`, чтобы проверить default excludes без пользовательского `exclude`;
+   - не добавлять эти файлы в реальные сценарии dependencies, если они нужны только для фильтров.
+4. Уточнить path aliases в `tests/fixtures/react-project/tsconfig.json`:
+   - оставить текущие `@ui` и `@ui/*`;
+   - добавить alias для app/feature слоя только если он реально используется новым fixture, например `@features/*`;
+   - покрыть alias импортом через barrel и прямым импортом, чтобы не смешивать проблему alias с проблемой re-export chain.
+5. Обновить `tests/searchComponents.test.ts` блоками по поведению, а не по файлам:
+   - `listComponents` видит компоненты из `src/app/**/page.tsx` и `src/app/**/layout.tsx`;
+   - props extraction работает для компонента из app fixture;
+   - JSDoc description извлекается из нового realistic component;
+   - `findComponentUsages` считает JSX usages из app/pages/components, но не из declaration file;
+   - `findUnusedComponents` сохраняет ожидаемый `reason` и `risk` для exported, default-exported и local-only компонентов;
+   - `getComponentDependencies` и `getComponentDependents` учитывают imports через alias и barrel в новых app fixtures.
+6. Разделить проверки scan filters:
+   - include `["src/**/*.tsx"]` возвращает компоненты из `components`, `pages` и `app`, но не `.ts` barrels;
+   - include `["src/components/*.tsx"]` не возвращает `Home` и app route components;
+   - exclude `["**/*.stories.tsx", "**/*.test.tsx", "**/*.spec.tsx"]` убирает usages и declarations из story/test fixtures;
+   - default excludes не сканируют `node_modules`, `dist`, `.next`, `storybook-static`.
+7. Стабилизировать ожидания тестов:
+   - сравнивать имена через sorted arrays там, где порядок не является контрактом;
+   - проверять paths через `normalizePath(...).endsWith(...)`;
+   - не завязывать тесты на точные line/column, кроме проверки `> 0`;
+   - держать один fixture на один смысловой сценарий, чтобы падения были понятными.
+8. Проверить документацию:
+   - если поведение scanner не меняется, `docs/REFERENCE.md` не трогать;
+   - если добавляются или уточняются правила фильтрации/default excludes, обновить `docs/REFERENCE.md`;
+   - README не расширять деталями fixtures.
+9. Выполнить проверки:
+   - `npm test`;
+   - `npm run build`;
+   - если тесты заметно замедлились, сократить fixtures или объединить проверки без потери сценариев.
+
+Готово, когда fixture-проект содержит `components`, `pages`, `app`, aliases, barrels, stories/tests и default-exclude директории, а regression-тесты защищают props, JSDoc, usage count, unused risk, dependencies/dependents и scan filters без flaky ожиданий.
 
 ## Этап 7. Релиз
 
