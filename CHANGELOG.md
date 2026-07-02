@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.1
+
+### Changed
+
+- Published the package to npm as `react-inspector-mcp`.
+- Updated installation instructions for npm/npx and project-local installs.
+
 ## v1.0.0
 
 Public v1.0.0 release of `react-inspector-mcp`.
@@ -15,4 +22,4 @@ Public v1.0.0 release of `react-inspector-mcp`.
 ### Notes
 
 - Requires Node.js 20+.
-- Published as `react-inspector-mcp` on npm.
+- GitHub release before npm publication.
