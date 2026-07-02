@@ -8,7 +8,8 @@
     },
     "files": [
         "dist",
-        "docs/REFERENCE.md"
+        "docs/REFERENCE.md",
+        "CHANGELOG.md"
     ],
     "scripts": {
         "dev": "tsx src/index.ts",
@@ -18,7 +19,6 @@
         "test": "tsx --test \"tests/**/*.test.ts\"",
         "prepare": "npm run build"
     },
-    "private": true,
     "keywords": [
         "mcp",
         "mcp-server",

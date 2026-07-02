@@ -2,11 +2,11 @@
 
 ## v1.0.0
 
-Initial public release of `react-inspector-mcp`.
+Public v1.0.0 release of `react-inspector-mcp`.
 
 ### Added
 
-- GitHub/npx startup flow for MCP clients.
+- npm/npx startup flow for MCP clients.
 - React component discovery with props, JSDoc metadata, usages, unused component detection, dependencies, and dependents.
 - TypeScript-aware component scanning powered by `ts-morph`.
 - Support for path aliases, barrels, re-exports, lazy imports, and supported React wrappers.
@@ -15,4 +15,4 @@ Initial public release of `react-inspector-mcp`.
 ### Notes
 
 - Requires Node.js 20+.
-- npm publishing is not enabled yet; install from GitHub.
+- Published as `react-inspector-mcp` on npm.

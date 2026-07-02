@@ -11,19 +11,17 @@ It helps find React components, read props and metadata, locate JSX usages, dete
 
 ## Installation
 
-For MCP clients, use the GitHub package through `npx`:
+For MCP clients, use the npm package through `npx`:
 
 ```bash
-npx -y github:vgratsilev/react-inspector-mcp
+npx -y react-inspector-mcp
 ```
 
-If your npm version cannot resolve the GitHub package executable, install it into a stable runtime directory:
+Or install it into your React project as a dev dependency:
 
 ```bash
-mkdir react-inspector-mcp-runtime
-cd react-inspector-mcp-runtime
-npm init -y
-npm install github:vgratsilev/react-inspector-mcp#v1.0.0
+cd C:/absolute/path/to/target-react-project
+npm install -D react-inspector-mcp
 ```
 
 For a local checkout:
@@ -39,7 +37,7 @@ npm run build
 
 ### Production
 
-Use the GitHub package through `npx`:
+Use the npm package through `npx`:
 
 ```json
 {
@@ -48,14 +46,14 @@ Use the GitHub package through `npx`:
       "command": "npx",
       "args": [
         "-y",
-        "github:vgratsilev/react-inspector-mcp"
+        "react-inspector-mcp"
       ]
     }
   }
 }
 ```
 
-If `npx` cannot resolve the GitHub package executable, use the compiled package installed above:
+For a project-local install, point to that project's installed package:
 
 ```json
 {
@@ -63,7 +61,7 @@ If `npx` cannot resolve the GitHub package executable, use the compiled package 
     "react-inspector-mcp": {
       "command": "node",
       "args": [
-        "C:/absolute/path/to/react-inspector-mcp-runtime/node_modules/react-inspector-mcp/dist/index.js"
+        "C:/absolute/path/to/target-react-project/node_modules/react-inspector-mcp/dist/index.js"
       ]
     }
   }
