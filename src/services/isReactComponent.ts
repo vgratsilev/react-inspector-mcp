@@ -1,9 +1,22 @@
 import {Node, SyntaxKind} from "ts-morph";
 import type {ComponentNode} from './../types/ComponentNode.js';
 import {
+    getComponentFunction,
     getComponentImplementationNode,
     isLazyComponentDeclaration,
 } from "./componentNodeUtils.js";
+
+function hasJsx(node: Node): boolean {
+    return (
+        node.getDescendantsOfKind(
+            SyntaxKind.JsxElement
+        ).length > 0 ||
+
+        node.getDescendantsOfKind(
+            SyntaxKind.JsxSelfClosingElement
+        ).length > 0
+    );
+}
 
 export function isReactComponent(node: ComponentNode): boolean {
 
@@ -11,15 +24,13 @@ export function isReactComponent(node: ComponentNode): boolean {
         return true;
     }
 
-    const implementationNode = getComponentImplementationNode(node);
+    if (Node.isFunctionDeclaration(node)) {
+        return hasJsx(getComponentImplementationNode(node));
+    }
 
-    return (
-        implementationNode.getDescendantsOfKind(
-            SyntaxKind.JsxElement
-        ).length > 0 ||
+    const componentFunction = getComponentFunction(node);
 
-        implementationNode.getDescendantsOfKind(
-            SyntaxKind.JsxSelfClosingElement
-        ).length > 0
-    );
+    return componentFunction
+        ? hasJsx(componentFunction)
+        : false;
 }

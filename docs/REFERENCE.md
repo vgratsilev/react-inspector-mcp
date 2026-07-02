@@ -389,6 +389,18 @@ export const Input = forwardRef((props: InputProps, ref) => {
 ```
 
 ```tsx
+export const Input = memo(forwardRef((props: InputProps, ref) => {
+  return <input ref={ref} value={props.value} />;
+}));
+```
+
+```tsx
+export const Input = React.memo(React.forwardRef((props: InputProps, ref) => {
+  return <input ref={ref} value={props.value} />;
+}));
+```
+
+```tsx
 export const LazyPanel = lazy(() => import("./Panel"));
 ```
 
@@ -400,7 +412,14 @@ export const LazyNamedPanel = lazy(() =>
 );
 ```
 
-The scanner recognizes `memo`, `React.memo`, `forwardRef`, and `React.forwardRef` wrappers when JSX is inside the wrapped function. It also recognizes `lazy` and `React.lazy` variable declarations as components.
+The scanner recognizes these component wrappers when JSX is inside the wrapped function:
+
+- `memo`
+- `React.memo`
+- `forwardRef`
+- `React.forwardRef`
+
+Wrappers can be nested, for example `memo(forwardRef(...))` and `React.memo(React.forwardRef(...))`. Arbitrary HOC calls such as `withSomething(...)` are not treated as components unless they are explicitly supported by this list. The scanner also recognizes `lazy` and `React.lazy` variable declarations as components.
 
 ## Usage Rules
 
@@ -436,7 +455,7 @@ Covered cases:
 - re-export chains
 - same-name components in dependency graphs
 - lazy import dependency edges
-- `memo`, `forwardRef`, and `lazy`
+- `memo`, `React.memo`, `forwardRef`, `React.forwardRef`, and `lazy`
 - unused component risk
 - component dependencies and dependents
 - `include` and `exclude` scan filters
@@ -449,7 +468,7 @@ npm test
 
 ## Known Limitations
 
-- Complex higher-order components beyond `memo`, `forwardRef`, and `lazy` are not fully recognized.
+- Higher-order components outside the documented wrapper allowlist are not recognized.
 - Component lookup by `componentName` returns the first exact case-insensitive name match when multiple components share the same name.
 - Usage scanning excludes JSX usages inside the component's own declaration file.
 - Results depend on the target project's `tsconfig.json`.

@@ -50,9 +50,44 @@ test("detects wrapped memo, forwardRef, and lazy components", async () => {
 
     assert.ok(names.includes("MemoBadge"));
     assert.ok(names.includes("ForwardInput"));
+    assert.ok(names.includes("NestedMemoForwardRef"));
+    assert.ok(names.includes("ReactNestedMemoForwardRef"));
+    assert.ok(names.includes("MixedMemoForwardRef"));
+    assert.ok(names.includes("MixedReactMemoForwardRef"));
     assert.ok(names.includes("LazyPanel"));
     assert.ok(names.includes("LazyDefaultPanel"));
     assert.ok(names.includes("LazyNamedPanel"));
+});
+
+test("extracts props from nested component wrappers", async () => {
+    const component = await getComponent(
+        fixturePath,
+        "NestedMemoForwardRef",
+        false
+    );
+
+    if ("found" in component) {
+        assert.fail(component.message);
+    }
+
+    assert.deepEqual(
+        component.props.map(prop => ({
+            name: prop.name,
+            optional: prop.optional,
+        })),
+        [
+            { name: "label", optional: false },
+            { name: "disabled", optional: true },
+        ]
+    );
+});
+
+test("ignores uppercase utilities and unsupported HOC calls", async () => {
+    const components = await listComponents(fixturePath);
+    const names = components.map(component => component.name);
+
+    assert.ok(!names.includes("PlainUppercaseUtility"));
+    assert.ok(!names.includes("WrappedPlainUtility"));
 });
 
 test("finds lazy component JSX usages", async () => {

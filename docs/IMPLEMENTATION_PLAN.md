@@ -96,15 +96,47 @@
 
 ## Этап 5. Поддержка более сложных HOC
 
-1. Вынести распознавание wrappers в отдельный модуль.
-2. Поддержать вложенные wrappers:
-   - `memo(forwardRef(...))`;
-   - `React.memo(React.forwardRef(...))`.
-3. Добавить ограниченный список дополнительных HOC только при наличии тестовых fixtures.
-4. Убедиться, что scanner не начинает считать обычные функции компонентами без JSX.
-5. Обновить `docs/REFERENCE.md` с точным списком поддержанных wrappers.
+Цель этапа: расширить распознавание оберток компонентов без ослабления базового правила scanner: компонент должен иметь имя с uppercase и JSX в фактической реализации, кроме специальных случаев вроде `lazy`.
 
-Готово, когда новые HOC покрыты тестами и не ухудшают текущие detection rules.
+1. Зафиксировать текущие правила до рефакторинга:
+   - проверить, что `memo`, `React.memo`, `forwardRef`, `React.forwardRef` уже описаны в `docs/REFERENCE.md`;
+   - добавить недостающие regression-тесты на `React.memo(...)` и `React.forwardRef(...)`, если они не покрыты fixtures;
+   - добавить negative fixture с uppercase variable/function без JSX, чтобы защитить текущее правило detection.
+2. Вынести распознавание wrappers из `componentNodeUtils.ts` в отдельный модуль:
+   - создать сервис для разбора wrapper call chain, например `componentWrapperUtils.ts`;
+   - оставить публичные helpers `getComponentFunction`, `getComponentPropsParameter`, `getComponentImplementationNode` без изменения контрактов;
+   - покрыть новый helper unit/fixture-тестами через существующий scanner API, без тестирования приватных AST-деталей.
+3. Поддержать вложенные wrappers:
+   - `memo(forwardRef((props, ref) => <... />))`;
+   - `forwardRef(memo((props) => <... />))`, только если это реально нужно и fixture подтверждает ожидаемое поведение;
+   - `React.memo(React.forwardRef((props, ref) => <... />))`;
+   - смешанные формы `memo(React.forwardRef(...))` и `React.memo(forwardRef(...))`.
+4. Ограничить список допустимых wrappers:
+   - базовый allowlist: `memo`, `React.memo`, `forwardRef`, `React.forwardRef`;
+   - новые HOC добавлять только отдельным пунктом после fixture и документации;
+   - не считать произвольный `withSomething(Component)` компонентом без явного решения, потому что это быстро дает false positives.
+5. Сохранить корректное извлечение props:
+   - для `memo(...)` брать первый параметр внутренней функции;
+   - для `forwardRef(...)` брать первый параметр внутренней функции, игнорируя `ref`;
+   - проверить, что nested wrappers не ломают props extraction в `list_components` и `get_component`.
+6. Добавить fixtures в `tests/fixtures/react-project`:
+   - отдельный компонент для nested `memo(forwardRef(...))`;
+   - отдельный компонент для `React.memo(React.forwardRef(...))`;
+   - компонент с props, чтобы проверить извлечение props из nested wrapper;
+   - negative fixture с обычной функцией/HOC без JSX, которая не должна попасть в список компонентов.
+7. Обновить tests в `tests/searchComponents.test.ts`:
+   - расширить тест detection wrapped components новыми именами;
+   - добавить проверку props для nested wrapper;
+   - добавить negative assertion, что non-component fixture не возвращается из `listComponents`.
+8. Обновить `docs/REFERENCE.md`:
+   - перечислить точный allowlist wrappers;
+   - добавить примеры nested wrappers;
+   - уточнить, что произвольные HOC не поддерживаются без явной поддержки и тестов.
+9. Выполнить проверки:
+   - `npm test`;
+   - `npm run build`.
+
+Готово, когда nested wrappers корректно находятся scanner, props извлекаются из внутренней функции, negative fixtures не попадают в список компонентов, `docs/REFERENCE.md` отражает точный allowlist, тесты и build проходят.
 
 ## Этап 6. Реальные fixture-сценарии
 

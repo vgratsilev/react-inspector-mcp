@@ -1,15 +1,13 @@
 import {
-    ArrowFunction,
     CallExpression,
-    FunctionExpression,
     Node,
     ParameterDeclaration,
     VariableDeclaration,
 } from "ts-morph";
 
 import type { ComponentNode } from "../types/ComponentNode.js";
-
-type ComponentFunction = ArrowFunction | FunctionExpression;
+import type { ComponentFunction } from "./componentWrapperUtils.js";
+import { unwrapComponentFunction } from "./componentWrapperUtils.js";
 
 function getCallName(callExpression: CallExpression): string {
     const expression = callExpression.getExpression();
@@ -31,35 +29,6 @@ function isCallNamed(node: Node, names: string[]): boolean {
     }
 
     return names.includes(getCallName(node));
-}
-
-function unwrapComponentFunction(
-    node: Node
-): ComponentFunction | undefined {
-    if (
-        Node.isArrowFunction(node) ||
-        Node.isFunctionExpression(node)
-    ) {
-        return node;
-    }
-
-    if (!Node.isCallExpression(node)) {
-        return undefined;
-    }
-
-    const callName = getCallName(node);
-
-    if (callName !== "memo" && callName !== "forwardRef") {
-        return undefined;
-    }
-
-    const firstArgument = node.getArguments()[0];
-
-    if (!firstArgument) {
-        return undefined;
-    }
-
-    return unwrapComponentFunction(firstArgument);
 }
 
 export function getComponentFunction(
