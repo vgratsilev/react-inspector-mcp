@@ -1,2 +1,11 @@
-node_modules
-.idea
+node_modules/
+dist/
+
+.idea/
+.kilo/
+.vscode/
+.agents/
+
+*.log
+.env
+.env.*
