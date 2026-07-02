@@ -1,5 +1,6 @@
 import path from "node:path";
-import { Node, Symbol } from "ts-morph";
+import { Node, ts } from "ts-morph";
+import type { SourceFile, Symbol } from "ts-morph";
 
 import type { ComponentNode } from "../types/ComponentNode.js";
 import type { InternalComponentInfo } from "../types/ComponentInfo.js";
@@ -8,6 +9,11 @@ const maxAliasResolutionDepth = 10;
 
 export interface ComponentResolver {
     resolveJsxTag(tagNameNode: Node): InternalComponentInfo | undefined;
+    resolveLazyImport(
+        sourceFile: SourceFile,
+        moduleSpecifier: string,
+        exportName?: string
+    ): InternalComponentInfo | undefined;
 }
 
 function normalizeFilePath(filePath: string): string {
@@ -138,29 +144,95 @@ export function createComponentResolver(
         addToMapList(componentsByName, component.name, component);
     }
 
+    function resolveByDeclaration(
+        declaration: Node
+    ): InternalComponentInfo | undefined {
+        const directMatch = componentsByDeclarationKey.get(
+            getNodeKey(declaration)
+        );
+
+        if (directMatch) {
+            return directMatch;
+        }
+
+        return findComponentContainingDeclaration(
+            declaration,
+            componentsByFile
+        );
+    }
+
     function resolveByDeclarations(
         symbol: Symbol
     ): InternalComponentInfo | undefined {
         for (const declaration of symbol.getDeclarations()) {
-            const directMatch = componentsByDeclarationKey.get(
-                getNodeKey(declaration)
-            );
+            const component = resolveByDeclaration(declaration);
 
-            if (directMatch) {
-                return directMatch;
-            }
-
-            const containingComponent = findComponentContainingDeclaration(
-                declaration,
-                componentsByFile
-            );
-
-            if (containingComponent) {
-                return containingComponent;
+            if (component) {
+                return component;
             }
         }
 
         return undefined;
+    }
+
+    function resolveExportedDeclaration(
+        sourceFile: SourceFile,
+        exportName: string
+    ): InternalComponentInfo | undefined {
+        const declarations = sourceFile
+            .getExportedDeclarations()
+            .get(exportName) ?? [];
+
+        for (const declaration of declarations) {
+            const component = resolveByDeclaration(declaration);
+
+            if (component) {
+                return component;
+            }
+        }
+
+        return undefined;
+    }
+
+    function getResolvedSourceFile(
+        sourceFile: SourceFile,
+        moduleSpecifier: string
+    ): SourceFile | undefined {
+        const resolvedModule = ts.resolveModuleName(
+            moduleSpecifier,
+            sourceFile.getFilePath(),
+            sourceFile.getProject().getCompilerOptions(),
+            ts.sys
+        ).resolvedModule;
+
+        if (!resolvedModule) {
+            return undefined;
+        }
+
+        return sourceFile
+            .getProject()
+            .getSourceFile(resolvedModule.resolvedFileName);
+    }
+
+    function resolveComponentInFile(
+        sourceFile: SourceFile,
+        exportName: string | undefined
+    ): InternalComponentInfo | undefined {
+        const componentsInFile = componentsByFile.get(
+            normalizeFilePath(sourceFile.getFilePath())
+        ) ?? [];
+
+        if (exportName) {
+            return resolveExportedDeclaration(sourceFile, exportName);
+        }
+
+        return (
+            resolveExportedDeclaration(sourceFile, "default") ??
+            componentsInFile.find(component => component.defaultExport) ??
+            (componentsInFile.length === 1
+                ? componentsInFile[0]
+                : undefined)
+        );
     }
 
     return {
@@ -180,6 +252,21 @@ export function createComponentResolver(
                 componentsBySymbol.get(resolvedSymbol) ??
                 resolveByDeclarations(resolvedSymbol)
             );
+        },
+
+        resolveLazyImport(
+            sourceFile: SourceFile,
+            moduleSpecifier: string,
+            exportName?: string
+        ): InternalComponentInfo | undefined {
+            const resolvedSourceFile = getResolvedSourceFile(
+                sourceFile,
+                moduleSpecifier
+            );
+
+            return resolvedSourceFile
+                ? resolveComponentInFile(resolvedSourceFile, exportName)
+                : undefined;
         },
     };
 }

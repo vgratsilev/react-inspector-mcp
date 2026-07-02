@@ -7,6 +7,7 @@ import {
     getComponentKey,
 } from "../services/componentResolver.js";
 import type { ComponentResolver } from "../services/componentResolver.js";
+import { getLazyImportReference } from "../services/lazyImportUtils.js";
 import { scanUsages } from "../services/usageScanner.js";
 import {
     ComponentDependencies,
@@ -107,19 +108,22 @@ function componentNotFound(componentName: string): ComponentNotFound {
     };
 }
 
-function createUsageLocation(jsxUsage: Node): ComponentUsageLocation {
-    const sourceFile = jsxUsage.getSourceFile();
+function createUsageLocation(
+    usageNode: Node,
+    kind: ComponentUsageLocation["kind"]
+): ComponentUsageLocation {
+    const sourceFile = usageNode.getSourceFile();
     const filePath = sourceFile.getFilePath();
     const { line, column } = sourceFile.getLineAndColumnAtPos(
-        jsxUsage.getStart()
+        usageNode.getStart()
     );
 
     return {
         filePath,
         line,
         column,
-        kind: "jsx",
-        text: jsxUsage.getText(),
+        kind,
+        text: usageNode.getText(),
     };
 }
 
@@ -134,6 +138,43 @@ function getDependenciesInsideComponent(
         InternalComponentDependency
     >();
     const seen = new Set<string>();
+
+    function addDependencyUsage(
+        dependencyComponent: InternalComponentInfo,
+        usageNode: Node,
+        kind: ComponentUsageLocation["kind"]
+    ): void {
+        const dependencyKey = getComponentKey(dependencyComponent);
+
+        if (dependencyKey === componentKey) {
+            return;
+        }
+
+        const usage = createUsageLocation(usageNode, kind);
+        const key = [
+            dependencyKey,
+            usage.filePath,
+            usage.line,
+            usage.column,
+            usage.kind,
+        ].join(":");
+
+        if (seen.has(key)) {
+            return;
+        }
+
+        seen.add(key);
+
+        const dependency = dependenciesByKey.get(dependencyKey) ?? {
+            componentKey: dependencyKey,
+            name: dependencyComponent.name,
+            path: dependencyComponent.path,
+            usages: [],
+        };
+
+        dependency.usages.push(usage);
+        dependenciesByKey.set(dependencyKey, dependency);
+    }
 
     for (const jsxUsage of implementationNode.getDescendants()) {
         if (
@@ -157,30 +198,25 @@ function getDependenciesInsideComponent(
             continue;
         }
 
-        const dependencyKey = getComponentKey(dependencyComponent);
+        addDependencyUsage(dependencyComponent, jsxUsage, "jsx");
+    }
 
-        if (dependencyKey === componentKey) {
-            continue;
+    const lazyImport = getLazyImportReference(component.node);
+
+    if (lazyImport) {
+        const dependencyComponent = resolver.resolveLazyImport(
+            component.node.getSourceFile(),
+            lazyImport.moduleSpecifier,
+            lazyImport.exportName
+        );
+
+        if (dependencyComponent) {
+            addDependencyUsage(
+                dependencyComponent,
+                lazyImport.lazyCall,
+                "lazy_import"
+            );
         }
-
-        const usage = createUsageLocation(jsxUsage);
-        const key = `${usage.filePath}:${usage.line}:${usage.column}`;
-
-        if (seen.has(key)) {
-            continue;
-        }
-
-        seen.add(key);
-
-        const dependency = dependenciesByKey.get(dependencyKey) ?? {
-            componentKey: dependencyKey,
-            name: dependencyComponent.name,
-            path: dependencyComponent.path,
-            usages: [],
-        };
-
-        dependency.usages.push(usage);
-        dependenciesByKey.set(dependencyKey, dependency);
     }
 
     return [...dependenciesByKey.values()];

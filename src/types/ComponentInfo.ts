@@ -26,7 +26,7 @@ export interface ComponentUsageLocation {
     filePath: string;
     line: number;
     column: number;
-    kind: "jsx";
+    kind: "jsx" | "lazy_import";
     text: string;
 }
 

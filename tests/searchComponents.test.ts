@@ -51,6 +51,8 @@ test("detects wrapped memo, forwardRef, and lazy components", async () => {
     assert.ok(names.includes("MemoBadge"));
     assert.ok(names.includes("ForwardInput"));
     assert.ok(names.includes("LazyPanel"));
+    assert.ok(names.includes("LazyDefaultPanel"));
+    assert.ok(names.includes("LazyNamedPanel"));
 });
 
 test("finds lazy component JSX usages", async () => {
@@ -151,6 +153,65 @@ test("returns component dependencies", async () => {
     );
 });
 
+test("returns lazy import dependencies", async () => {
+    const cases = [
+        ["LazyPanel", "Panel", "src/components/Panel.tsx"],
+        [
+            "LazyDefaultPanel",
+            "DefaultPanel",
+            "src/components/DefaultPanel.tsx",
+        ],
+        ["LazyNamedPanel", "NamedPanel", "src/components/NamedPanel.tsx"],
+    ] as const;
+
+    for (const [componentName, dependencyName, dependencyPath] of cases) {
+        const result = await getComponentDependencies(
+            fixturePath,
+            componentName
+        );
+
+        if ("found" in result) {
+            assert.fail(result.message);
+        }
+
+        assert.equal(result.componentName, componentName);
+        assert.deepEqual(
+            result.dependencies.map(dependency => dependency.name),
+            [dependencyName]
+        );
+
+        const dependency = result.dependencies[0];
+        const usage = dependency?.usages[0];
+
+        assert.ok(dependency);
+        assert.ok(normalizePath(dependency.path).endsWith(dependencyPath));
+        assert.equal(dependency.usages.length, 1);
+        assert.equal(usage?.kind, "lazy_import");
+        assert.match(usage?.text ?? "", /lazy/);
+    }
+});
+
+test("resolves lazy import dependencies through tsconfig paths", async () => {
+    const result = await getComponentDependencies(
+        fixturePath,
+        "LazyAliasPanel"
+    );
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    const dependency = result.dependencies[0];
+
+    assert.equal(dependency?.name, "DefaultPanel");
+    assert.ok(
+        normalizePath(dependency?.path ?? "").endsWith(
+            "src/components/DefaultPanel.tsx"
+        )
+    );
+    assert.equal(dependency?.usages[0]?.kind, "lazy_import");
+});
+
 test("resolves dependencies by symbol for same-name components", async () => {
     const result = await getComponentDependencies(
         fixturePath,
@@ -200,6 +261,20 @@ test("returns component dependents", async () => {
         result.dependents.map(dependent => dependent.name),
         ["Dashboard"]
     );
+});
+
+test("returns lazy import dependents", async () => {
+    const result = await getComponentDependents(fixturePath, "NamedPanel");
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    assert.deepEqual(
+        result.dependents.map(dependent => dependent.name),
+        ["LazyNamedPanel"]
+    );
+    assert.equal(result.dependents[0]?.usages[0]?.kind, "lazy_import");
 });
 
 test("does not merge dependents for same-name components", async () => {

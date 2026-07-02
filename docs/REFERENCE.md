@@ -125,6 +125,9 @@ Default excludes:
 
 `usageCount` counts JSX usages outside the component declaration file.
 
+Dependency and dependent usage locations can also use `kind: "lazy_import"`
+when the edge comes from `lazy(() => import(...))` or `React.lazy`.
+
 ## Tools
 
 ### `search_components`
@@ -389,6 +392,14 @@ export const Input = forwardRef((props: InputProps, ref) => {
 export const LazyPanel = lazy(() => import("./Panel"));
 ```
 
+```tsx
+export const LazyNamedPanel = lazy(() =>
+  import("./Panel").then(module => ({
+    default: module.Panel,
+  }))
+);
+```
+
 The scanner recognizes `memo`, `React.memo`, `forwardRef`, and `React.forwardRef` wrappers when JSX is inside the wrapped function. It also recognizes `lazy` and `React.lazy` variable declarations as components.
 
 ## Usage Rules
@@ -404,6 +415,13 @@ Usage resolution follows TypeScript symbols where possible, so alias imports and
 
 Dependency and dependent resolution uses the same TypeScript symbol resolution. Components with the same local name in different files are treated as separate graph nodes when their JSX tags resolve to different declarations.
 
+Dependency and dependent graphs also include lazy import edges from the lazy
+wrapper component to the imported component target. Lazy import targets are
+resolved through the target project's `tsconfig.json`; default exports, named
+exports from `.then(...)`, barrels, re-exports, and path aliases are resolved
+where TypeScript can resolve them. If no explicit export is found, the scanner
+falls back to the only component in the imported source file.
+
 ## Testing
 
 The test suite uses a mock React project in `tests/fixtures/react-project`.
@@ -417,6 +435,7 @@ Covered cases:
 - alias imports and barrel exports
 - re-export chains
 - same-name components in dependency graphs
+- lazy import dependency edges
 - `memo`, `forwardRef`, and `lazy`
 - unused component risk
 - component dependencies and dependents
@@ -432,7 +451,6 @@ npm test
 
 - Complex higher-order components beyond `memo`, `forwardRef`, and `lazy` are not fully recognized.
 - Component lookup by `componentName` returns the first exact case-insensitive name match when multiple components share the same name.
-- Lazy import targets are detected as lazy component declarations, but the imported target is not expanded into a dependency edge.
 - Usage scanning excludes JSX usages inside the component's own declaration file.
 - Results depend on the target project's `tsconfig.json`.
 
