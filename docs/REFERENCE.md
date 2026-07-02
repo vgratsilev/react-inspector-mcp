@@ -2,6 +2,42 @@
 
 Detailed reference for `react-inspector-mcp` tools, inputs, response shapes, scan rules, and limitations.
 
+## Runtime
+
+Requires Node.js 20+.
+
+Production MCP config from GitHub through `npx`:
+
+```json
+{
+  "mcpServers": {
+    "react-inspector-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "github:vgratsilev/react-inspector-mcp"
+      ]
+    }
+  }
+}
+```
+
+Local development config:
+
+```json
+{
+  "mcpServers": {
+    "react-inspector-mcp-dev": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "C:/absolute/path/to/react-inspector-mcp/src/index.ts"
+      ]
+    }
+  }
+}
+```
+
 ## Common Input
 
 All tools require `projectPath`.
