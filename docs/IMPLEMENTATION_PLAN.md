@@ -56,7 +56,7 @@
    - запустить bin;
    - выполнить MCP initialize smoke test.
 5. Обновить `README.md` и `docs/REFERENCE.md`:
-   - добавить готовый MCP client config для GitHub/npx;
+   - добавить готовый пример `mcp-config.json` для GitHub/npx;
    - описать требования Node.js 20+;
    - оставить локальный dev config отдельным блоком.
 
