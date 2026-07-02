@@ -16,6 +16,10 @@ import {
 const testDir = dirname(fileURLToPath(import.meta.url));
 const fixturePath = resolve(testDir, "fixtures/react-project");
 
+function normalizePath(value: string): string {
+    return value.replace(/\\/g, "/");
+}
+
 test("lists detected React components with props and metadata", async () => {
     const components = await listComponents(fixturePath);
     const button = components.find(component => component.name === "Button");
@@ -147,6 +151,44 @@ test("returns component dependencies", async () => {
     );
 });
 
+test("resolves dependencies by symbol for same-name components", async () => {
+    const result = await getComponentDependencies(
+        fixturePath,
+        "SameNameDashboard"
+    );
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    const cardDependencies = result.dependencies.filter(
+        dependency => dependency.name === "Card"
+    );
+    const featureACard = cardDependencies.find(dependency =>
+        normalizePath(dependency.path).endsWith("src/feature-a/Card.tsx")
+    );
+    const featureBCard = cardDependencies.find(dependency =>
+        normalizePath(dependency.path).endsWith("src/feature-b/Card.tsx")
+    );
+
+    assert.equal(cardDependencies.length, 2);
+    assert.ok(featureACard);
+    assert.ok(featureBCard);
+    assert.deepEqual(
+        featureACard.usages.map(usage => usage.text),
+        ["<ProductCard />"]
+    );
+    assert.deepEqual(
+        featureBCard.usages.map(usage => usage.text),
+        ["<MarketingCard />", "<DirectFeatureBCard />"]
+    );
+    assert.ok(
+        !result.dependencies.some(
+            dependency => dependency.name === "MissingWidget"
+        )
+    );
+});
+
 test("returns component dependents", async () => {
     const result = await getComponentDependents(fixturePath, "MemoBadge");
 
@@ -157,6 +199,53 @@ test("returns component dependents", async () => {
     assert.deepEqual(
         result.dependents.map(dependent => dependent.name),
         ["Dashboard"]
+    );
+});
+
+test("does not merge dependents for same-name components", async () => {
+    const components = await listComponents(fixturePath);
+    const selectedCard = components.find(component =>
+        component.name === "Card"
+    );
+
+    assert.ok(selectedCard);
+
+    const selectedPath = normalizePath(selectedCard.path);
+    const selectedFeature = selectedPath.includes("/feature-a/")
+        ? "feature-a"
+        : "feature-b";
+    const expectedConsumer =
+        selectedFeature === "feature-a"
+            ? "FeatureACardConsumer"
+            : "FeatureBCardConsumer";
+    const unexpectedConsumer =
+        selectedFeature === "feature-a"
+            ? "FeatureBCardConsumer"
+            : "FeatureACardConsumer";
+    const expectedDashboardUsages =
+        selectedFeature === "feature-a"
+            ? ["<ProductCard />"]
+            : ["<MarketingCard />", "<DirectFeatureBCard />"];
+
+    const result = await getComponentDependents(fixturePath, "Card");
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    const dependentNames = result.dependents.map(
+        dependent => dependent.name
+    );
+    const dashboard = result.dependents.find(
+        dependent => dependent.name === "SameNameDashboard"
+    );
+
+    assert.ok(dependentNames.includes(expectedConsumer));
+    assert.ok(!dependentNames.includes(unexpectedConsumer));
+    assert.ok(dashboard);
+    assert.deepEqual(
+        dashboard.usages.map(usage => usage.text),
+        expectedDashboardUsages
     );
 });
 

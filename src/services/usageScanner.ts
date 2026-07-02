@@ -1,4 +1,4 @@
-import { Node, Symbol } from "ts-morph";
+import { Node } from "ts-morph";
 import path from "node:path";
 
 import {
@@ -7,60 +7,8 @@ import {
     InternalComponentInfo,
 } from "../types/ComponentInfo.js";
 import type { ScanOptions } from "../types/ScanOptions.js";
+import { createComponentResolver } from "./componentResolver.js";
 import { shouldIncludeFile } from "./pathMatcher.js";
-
-function resolveAliasedSymbol(symbol: Symbol): Symbol {
-    let current = symbol;
-
-    for (let index = 0; index < 10; index++) {
-        const aliased = current.getAliasedSymbol();
-
-        if (!aliased) {
-            return current;
-        }
-
-        current = aliased;
-    }
-
-    return current;
-}
-
-function isComponentDeclaration(
-    declaration: Node,
-    component: InternalComponentInfo
-): boolean {
-    if (declaration === component.node) {
-        return true;
-    }
-
-    if (declaration.getSourceFile().getFilePath() !== component.path) {
-        return false;
-    }
-
-    return (
-        declaration.getStart() >= component.node.getStart() &&
-        declaration.getEnd() <= component.node.getEnd()
-    );
-}
-
-function tagResolvesToComponent(
-    tagNameNode: Node,
-    component: InternalComponentInfo
-): boolean {
-    const symbol = tagNameNode.getSymbol();
-
-    if (!symbol) {
-        return tagNameNode.getText() === component.name;
-    }
-
-    const resolvedSymbol = resolveAliasedSymbol(symbol);
-
-    return resolvedSymbol
-        .getDeclarations()
-        .some(declaration =>
-            isComponentDeclaration(declaration, component)
-        );
-}
 
 function addUsage(
     usages: ComponentUsageLocation[],
@@ -93,12 +41,20 @@ export async function scanUsages(
     component: InternalComponentInfo,
     projectPath: string,
     options: ScanOptions = {},
-    includeDeclarationFile = false
+    usageOptions: {
+        includeDeclarationFile?: boolean;
+        components?: InternalComponentInfo[];
+    } = {}
 ): Promise<ComponentUsage> {
     const normalizedProjectPath = path.resolve(projectPath);
     const componentFile = component.node
         .getSourceFile()
         .getFilePath();
+    const includeDeclarationFile =
+        usageOptions.includeDeclarationFile ?? false;
+    const resolver = createComponentResolver(
+        usageOptions.components ?? [component]
+    );
     const usages: ComponentUsageLocation[] = [];
     const seen = new Set<string>();
 
@@ -128,7 +84,7 @@ export async function scanUsages(
                 continue;
             }
 
-            if (!tagResolvesToComponent(tagNameNode, component)) {
+            if (resolver.resolveJsxTag(tagNameNode) !== component) {
                 continue;
             }
 

@@ -2,6 +2,11 @@ import { Node } from "ts-morph";
 
 import { scanComponents } from "../services/componentScanner.js";
 import { getComponentImplementationNode } from "../services/componentNodeUtils.js";
+import {
+    createComponentResolver,
+    getComponentKey,
+} from "../services/componentResolver.js";
+import type { ComponentResolver } from "../services/componentResolver.js";
 import { scanUsages } from "../services/usageScanner.js";
 import {
     ComponentDependencies,
@@ -22,6 +27,10 @@ type PublicComponentInfo = ComponentInfo & Pick<
     FullComponentInfo,
     "description" | "exported" | "defaultExport"
 >;
+
+type InternalComponentDependency = ComponentDependency & {
+    componentKey: string;
+};
 
 function toPublicComponent(
     component: InternalComponentInfo
@@ -98,11 +107,32 @@ function componentNotFound(componentName: string): ComponentNotFound {
     };
 }
 
-function getJsxUsagesInsideComponent(
-    component: InternalComponentInfo
-): ComponentUsageLocation[] {
+function createUsageLocation(jsxUsage: Node): ComponentUsageLocation {
+    const sourceFile = jsxUsage.getSourceFile();
+    const filePath = sourceFile.getFilePath();
+    const { line, column } = sourceFile.getLineAndColumnAtPos(
+        jsxUsage.getStart()
+    );
+
+    return {
+        filePath,
+        line,
+        column,
+        kind: "jsx",
+        text: jsxUsage.getText(),
+    };
+}
+
+function getDependenciesInsideComponent(
+    component: InternalComponentInfo,
+    resolver: ComponentResolver
+): InternalComponentDependency[] {
     const implementationNode = getComponentImplementationNode(component.node);
-    const usages: ComponentUsageLocation[] = [];
+    const componentKey = getComponentKey(component);
+    const dependenciesByKey = new Map<
+        string,
+        InternalComponentDependency
+    >();
     const seen = new Set<string>();
 
     for (const jsxUsage of implementationNode.getDescendants()) {
@@ -119,12 +149,22 @@ function getJsxUsagesInsideComponent(
             continue;
         }
 
-        const sourceFile = jsxUsage.getSourceFile();
-        const filePath = sourceFile.getFilePath();
-        const { line, column } = sourceFile.getLineAndColumnAtPos(
-            jsxUsage.getStart()
+        const dependencyComponent = resolver.resolveJsxTag(
+            jsxUsage.getTagNameNode()
         );
-        const key = `${filePath}:${line}:${column}`;
+
+        if (!dependencyComponent) {
+            continue;
+        }
+
+        const dependencyKey = getComponentKey(dependencyComponent);
+
+        if (dependencyKey === componentKey) {
+            continue;
+        }
+
+        const usage = createUsageLocation(jsxUsage);
+        const key = `${usage.filePath}:${usage.line}:${usage.column}`;
 
         if (seen.has(key)) {
             continue;
@@ -132,57 +172,43 @@ function getJsxUsagesInsideComponent(
 
         seen.add(key);
 
-        usages.push({
-            filePath,
-            line,
-            column,
-            kind: "jsx",
-            text: jsxUsage.getText(),
-        });
+        const dependency = dependenciesByKey.get(dependencyKey) ?? {
+            componentKey: dependencyKey,
+            name: dependencyComponent.name,
+            path: dependencyComponent.path,
+            usages: [],
+        };
+
+        dependency.usages.push(usage);
+        dependenciesByKey.set(dependencyKey, dependency);
     }
 
-    return usages;
+    return [...dependenciesByKey.values()];
+}
+
+function toPublicDependency(
+    dependency: InternalComponentDependency
+): ComponentDependency {
+    return {
+        name: dependency.name,
+        path: dependency.path,
+        usages: dependency.usages,
+    };
 }
 
 function buildDependencyMap(
     components: InternalComponentInfo[]
-): Map<string, ComponentDependency[]> {
-    const componentsByName = new Map(
-        components.map(component => [component.name, component])
-    );
-    const dependenciesByComponent = new Map<string, ComponentDependency[]>();
+): Map<string, InternalComponentDependency[]> {
+    const dependenciesByComponent = new Map<
+        string,
+        InternalComponentDependency[]
+    >();
+    const resolver = createComponentResolver(components);
 
     for (const component of components) {
-        const usages = getJsxUsagesInsideComponent(component);
-        const dependenciesByName = new Map<string, ComponentDependency>();
-
-        for (const usage of usages) {
-            const match = usage.text.match(/^<\s*([A-Z][\w.]*)/);
-            const dependencyName = match?.[1]?.split(".")[0];
-
-            if (!dependencyName || dependencyName === component.name) {
-                continue;
-            }
-
-            const dependencyComponent = componentsByName.get(dependencyName);
-
-            if (!dependencyComponent) {
-                continue;
-            }
-
-            const dependency = dependenciesByName.get(dependencyName) ?? {
-                name: dependencyComponent.name,
-                path: dependencyComponent.path,
-                usages: [],
-            };
-
-            dependency.usages.push(usage);
-            dependenciesByName.set(dependencyName, dependency);
-        }
-
         dependenciesByComponent.set(
-            component.name,
-            [...dependenciesByName.values()]
+            getComponentKey(component),
+            getDependenciesInsideComponent(component, resolver)
         );
     }
 
@@ -204,7 +230,9 @@ export async function searchComponents(
     for (const component of matched) {
         result.push({
             ...toPublicComponent(component),
-            ...(await scanUsages(component, projectPath, options)),
+            ...(await scanUsages(component, projectPath, options, {
+                components,
+            })),
         });
     }
 
@@ -245,7 +273,9 @@ export async function getComponent(
 
     return {
         ...publicComponent,
-        ...(await scanUsages(component, projectPath, options)),
+        ...(await scanUsages(component, projectPath, options, {
+            components,
+        })),
     };
 }
 
@@ -261,7 +291,7 @@ export async function findComponentUsages(
         return componentNotFound(componentName);
     }
 
-    return scanUsages(component, projectPath, options);
+    return scanUsages(component, projectPath, options, { components });
 }
 
 export async function findUnusedComponents(
@@ -272,7 +302,9 @@ export async function findUnusedComponents(
     const result: UnusedComponentInfo[] = [];
 
     for (const component of components) {
-        const usage = await scanUsages(component, projectPath, options);
+        const usage = await scanUsages(component, projectPath, options, {
+            components,
+        });
 
         if (usage.usageCount > 0) {
             continue;
@@ -303,8 +335,10 @@ export async function getComponentDependencies(
 
     return {
         componentName: component.name,
-        dependencies:
-            buildDependencyMap(components).get(component.name) ?? [],
+        dependencies: (
+            buildDependencyMap(components).get(getComponentKey(component)) ??
+            []
+        ).map(toPublicDependency),
     };
 }
 
@@ -321,13 +355,20 @@ export async function getComponentDependents(
     }
 
     const dependencyMap = buildDependencyMap(components);
+    const componentKey = getComponentKey(component);
+    const componentsByKey = new Map(
+        components.map(candidate => [
+            getComponentKey(candidate),
+            candidate,
+        ])
+    );
     const dependents = [...dependencyMap.entries()]
-        .filter(([name]) => name !== component.name)
-        .flatMap(([name, dependencies]) => {
+        .filter(([dependentKey]) => dependentKey !== componentKey)
+        .flatMap(([dependentKey, dependencies]) => {
             const dependency = dependencies.find(candidate =>
-                candidate.name === component.name
+                candidate.componentKey === componentKey
             );
-            const dependent = getComponentByName(components, name);
+            const dependent = componentsByKey.get(dependentKey);
 
             if (!dependency || !dependent) {
                 return [];

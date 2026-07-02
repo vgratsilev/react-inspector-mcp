@@ -12,3 +12,5 @@ declare namespace JSX {
     svg: Record<string, unknown>;
   }
 }
+
+declare const MissingWidget: () => JSX.Element;

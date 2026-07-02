@@ -402,6 +402,8 @@ The scanner intentionally ignores imports, exports, type references, arrays, and
 
 Usage resolution follows TypeScript symbols where possible, so alias imports and barrel exports are supported when the target project's `tsconfig.json` can resolve them.
 
+Dependency and dependent resolution uses the same TypeScript symbol resolution. Components with the same local name in different files are treated as separate graph nodes when their JSX tags resolve to different declarations.
+
 ## Testing
 
 The test suite uses a mock React project in `tests/fixtures/react-project`.
@@ -413,6 +415,8 @@ Covered cases:
 - JSX usage tracking
 - ignored non-JSX references
 - alias imports and barrel exports
+- re-export chains
+- same-name components in dependency graphs
 - `memo`, `forwardRef`, and `lazy`
 - unused component risk
 - component dependencies and dependents
@@ -427,7 +431,7 @@ npm test
 ## Known Limitations
 
 - Complex higher-order components beyond `memo`, `forwardRef`, and `lazy` are not fully recognized.
-- Dependency graph resolution currently matches component JSX tags by local component name.
+- Component lookup by `componentName` returns the first exact case-insensitive name match when multiple components share the same name.
 - Lazy import targets are detected as lazy component declarations, but the imported target is not expanded into a dependency edge.
 - Usage scanning excludes JSX usages inside the component's own declaration file.
 - Results depend on the target project's `tsconfig.json`.
