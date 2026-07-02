@@ -11,10 +11,13 @@ It helps find React components, read props and metadata, locate JSX usages, dete
 
 ## Installation
 
-For MCP clients, use the GitHub package through `npx`:
+For MCP clients, install the GitHub package into a stable runtime directory:
 
 ```bash
-npx -y github:vgratsilev/react-inspector-mcp
+mkdir react-inspector-mcp-runtime
+cd react-inspector-mcp-runtime
+npm init -y
+npm install github:vgratsilev/react-inspector-mcp#v1.0.0
 ```
 
 For a local checkout:
@@ -30,23 +33,22 @@ npm run build
 
 ### Production
 
-Use the GitHub package through `npx`. The package builds itself during install:
+Use the compiled GitHub package installed above:
 
 ```json
 {
   "mcpServers": {
     "react-inspector-mcp": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "github:vgratsilev/react-inspector-mcp"
+        "C:/absolute/path/to/react-inspector-mcp-runtime/node_modules/react-inspector-mcp/dist/index.js"
       ]
     }
   }
 }
 ```
 
-For a local compiled checkout:
+For a local compiled checkout, point to that checkout's `dist/index.js`:
 
 ```json
 {
