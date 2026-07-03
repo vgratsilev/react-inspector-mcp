@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added a packaged MCP smoke test that installs the packed tarball and verifies the stdio handshake, tool listing, and `list_components`.
+- Added CI coverage for Node.js 20 and 22, packaged smoke testing, and `npm pack --dry-run`.
+
 ## v1.0.1
 
 ### Changed

@@ -135,12 +135,14 @@ npm run dev
 npm run build
 npm start
 npm test
+npm run test:smoke
 ```
 
 - `npm run dev` starts the MCP server from `src/index.ts` using `tsx`.
 - `npm run build` compiles TypeScript into `dist`.
 - `npm start` starts the compiled MCP server from `dist/index.js`.
 - `npm test` runs fixture-based tool tests.
+- `npm run test:smoke` packs and installs the package into a temporary project, then checks the MCP stdio handshake and `list_components`.
 
 ## Project Docs
 
