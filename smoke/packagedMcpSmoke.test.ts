@@ -220,11 +220,33 @@ function getToolText(result: unknown): string {
     return firstContent.text;
 }
 
-function assertRecordArray(
+function assertPaginatedRecordArray(
     value: unknown
-): asserts value is Record<string, unknown>[] {
-    if (!Array.isArray(value) || !value.every(isRecord)) {
-        assert.fail("Expected list_components to return an array of objects");
+): asserts value is {
+    items: Record<string, unknown>[];
+    total: number;
+    returned: number;
+    truncated: boolean;
+    nextOffset: number | null;
+} {
+    if (!isRecord(value)) {
+        assert.fail("Expected list_components to return an object");
+    }
+
+    if (!Array.isArray(value.items) || !value.items.every(isRecord)) {
+        assert.fail("Expected list_components items to be an array of objects");
+    }
+
+    if (
+        typeof value.total !== "number" ||
+        typeof value.returned !== "number" ||
+        typeof value.truncated !== "boolean" ||
+        (
+            value.nextOffset !== null &&
+            typeof value.nextOffset !== "number"
+        )
+    ) {
+        assert.fail("Expected list_components to return pagination metadata");
     }
 }
 
@@ -314,15 +336,21 @@ test(
                 getToolText(listComponentsResult)
             );
 
-            assertRecordArray(payload);
+            assertPaginatedRecordArray(payload);
 
-            const componentNames = payload.map(component => component.name);
-            const button = payload.find(component =>
+            const componentNames = payload.items.map(
+                component => component.name
+            );
+            const button = payload.items.find(component =>
                 component.name === "Button"
             );
 
             assert.ok(componentNames.includes("App"));
             assert.ok(button, "Button component was not returned");
+            assert.equal(payload.total, 2);
+            assert.equal(payload.returned, 2);
+            assert.equal(payload.truncated, false);
+            assert.equal(payload.nextOffset, null);
             assert.equal(button.exported, true);
 
             const props = button.props;

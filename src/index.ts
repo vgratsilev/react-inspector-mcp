@@ -17,17 +17,31 @@ import {
     listComponents,
     searchComponents,
 } from "./tools/searchComponents.js";
+import {
+    componentOutputFields,
+    componentOutputModes,
+    DEFAULT_OUTPUT_LIMIT,
+} from "./types/ComponentOutput.js";
 
 const scanOptionsSchema = z.object({
     include: z.array(z.string().trim().min(1)).optional(),
     exclude: z.array(z.string().trim().min(1)).optional(),
 });
 
+const outputOptionsSchema = z.object({
+    limit: z.number().int().positive().default(DEFAULT_OUTPUT_LIMIT),
+    offset: z.number().int().nonnegative().default(0),
+    mode: z.enum(componentOutputModes).default("summary"),
+    fields: z.array(z.enum(componentOutputFields)).min(1).optional(),
+});
+
 const projectPathSchema = scanOptionsSchema.extend({
     projectPath: z.string().trim().min(1),
 });
 
-const searchComponentsSchema = projectPathSchema.extend({
+const broadToolSchema = projectPathSchema.merge(outputOptionsSchema);
+
+const searchComponentsSchema = broadToolSchema.extend({
     query: z.string().trim().default(""),
 });
 
@@ -60,6 +74,42 @@ const projectPathInputSchema = {
         description: "Absolute path to project root",
     },
     ...scanOptionsInputSchema,
+};
+
+const outputOptionsInputSchema = {
+    limit: {
+        type: "integer",
+        minimum: 1,
+        default: DEFAULT_OUTPUT_LIMIT,
+        description: "Maximum number of components to return.",
+    },
+    offset: {
+        type: "integer",
+        minimum: 0,
+        default: 0,
+        description: "Zero-based offset for paginated component results.",
+    },
+    mode: {
+        type: "string",
+        enum: [...componentOutputModes],
+        default: "summary",
+        description:
+            "summary returns compact props; full returns full component fields.",
+    },
+    fields: {
+        type: "array",
+        items: {
+            type: "string",
+            enum: [...componentOutputFields],
+        },
+        description:
+            "Optional top-level fields to include in each returned component.",
+    },
+};
+
+const broadToolInputSchema = {
+    ...projectPathInputSchema,
+    ...outputOptionsInputSchema,
 };
 
 function formatError(error: unknown): string {
@@ -115,11 +165,11 @@ server.setRequestHandler(
             {
                 name: "search_components",
                 description:
-                    "Search React components and return props and JSX usages",
+                    "Search React components and return paginated props and usage metadata",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        ...projectPathInputSchema,
+                        ...broadToolInputSchema,
                         query: {
                             type: "string",
                             description:
@@ -132,10 +182,10 @@ server.setRequestHandler(
             {
                 name: "list_components",
                 description:
-                    "List React components with props and metadata",
+                    "List React components with paginated props and metadata",
                 inputSchema: {
                     type: "object",
-                    properties: projectPathInputSchema,
+                    properties: broadToolInputSchema,
                     required: ["projectPath"],
                 },
             },
@@ -240,7 +290,7 @@ server.setRequestHandler(
                     parsedArgs
                 );
             } else if (name === "list_components") {
-                const parsedArgs = projectPathSchema.parse(args);
+                const parsedArgs = broadToolSchema.parse(args);
 
                 result = await listComponents(
                     parsedArgs.projectPath,

@@ -35,8 +35,91 @@ function countIncludedSourceFiles(): number {
     ).length;
 }
 
+async function listAllComponents() {
+    return (
+        await listComponents(fixturePath, {
+            limit: 100,
+            mode: "full",
+        })
+    ).items;
+}
+
+test("limits list_components by default", async () => {
+    const result = await listComponents(fixturePath);
+
+    assert.equal(result.items.length, 20);
+    assert.equal(result.returned, 20);
+    assert.equal(result.truncated, true);
+    assert.equal(result.nextOffset, 20);
+    assert.ok(result.total > result.returned);
+});
+
+test("paginates list_components with limit and offset", async () => {
+    const allComponents = await listComponents(fixturePath, {
+        limit: 100,
+        mode: "full",
+    });
+    const page = await listComponents(fixturePath, {
+        limit: 3,
+        offset: 2,
+        mode: "full",
+    });
+
+    assert.equal(page.returned, 3);
+    assert.equal(page.total, allComponents.total);
+    assert.deepEqual(
+        page.items.map(component => component.name),
+        allComponents.items.slice(2, 5).map(component => component.name)
+    );
+});
+
+test("returns compact props in summary mode", async () => {
+    const result = await searchComponents(fixturePath, "Button");
+    const button = result.items.find(component =>
+        component.name === "Button"
+    );
+    const prop = Array.isArray(button?.props)
+        ? button.props[0]
+        : undefined;
+
+    assert.ok(button);
+    assert.equal(button.usageCount, 4);
+    assert.ok(prop);
+    assert.equal("type" in prop, false);
+    assert.equal("usedIn" in button, false);
+});
+
+test("returns full component fields in full mode", async () => {
+    const result = await searchComponents(fixturePath, "Button", {
+        mode: "full",
+    });
+    const button = result.items.find(component =>
+        component.name === "Button"
+    );
+    const prop = Array.isArray(button?.props)
+        ? button.props[0]
+        : undefined;
+
+    assert.ok(button);
+    assert.ok(button.declaration);
+    assert.ok(Array.isArray(button.usedIn));
+    assert.ok(prop);
+    assert.equal("type" in prop, true);
+});
+
+test("filters broad component fields", async () => {
+    const result = await listComponents(fixturePath, {
+        fields: ["name"],
+        limit: 1,
+    });
+    const component = result.items[0];
+
+    assert.ok(component);
+    assert.deepEqual(Object.keys(component), ["name"]);
+});
+
 test("lists detected React components with props and metadata", async () => {
-    const components = await listComponents(fixturePath);
+    const components = await listAllComponents();
     const button = components.find(component => component.name === "Button");
 
     assert.ok(button);
@@ -60,7 +143,7 @@ test("lists detected React components with props and metadata", async () => {
 });
 
 test("lists app route components with props and JSDoc metadata", async () => {
-    const components = await listComponents(fixturePath);
+    const components = await listAllComponents();
     const names = sortedNames(components);
     const appShell = components.find(component =>
         component.name === "AppShell"
@@ -94,7 +177,7 @@ test("lists app route components with props and JSDoc metadata", async () => {
 });
 
 test("detects wrapped memo, forwardRef, and lazy components", async () => {
-    const components = await listComponents(fixturePath);
+    const components = await listAllComponents();
     const names = components.map(component => component.name);
 
     assert.ok(names.includes("MemoBadge"));
@@ -132,7 +215,7 @@ test("extracts props from nested component wrappers", async () => {
 });
 
 test("ignores uppercase utilities and unsupported HOC calls", async () => {
-    const components = await listComponents(fixturePath);
+    const components = await listAllComponents();
     const names = components.map(component => component.name);
 
     assert.ok(!names.includes("PlainUppercaseUtility"));
@@ -151,19 +234,19 @@ test("finds lazy component JSX usages", async () => {
 });
 
 test("searches components by prop name", async () => {
-    const components = await searchComponents(fixturePath, "variant");
+    const result = await searchComponents(fixturePath, "variant");
 
     assert.deepEqual(
-        components.map(component => component.name),
+        result.items.map(component => component.name),
         ["Button"]
     );
 });
 
 test("searches components by JSDoc description", async () => {
-    const components = await searchComponents(fixturePath, "application shell");
+    const result = await searchComponents(fixturePath, "application shell");
 
     assert.deepEqual(
-        components.map(component => component.name),
+        result.items.map(component => component.name),
         ["AppShell"]
     );
 });
@@ -462,7 +545,7 @@ test("returns lazy import dependents", async () => {
 });
 
 test("does not merge dependents for same-name components", async () => {
-    const components = await listComponents(fixturePath);
+    const components = await listAllComponents();
     const selectedCard = components.find(component =>
         component.name === "Card"
     );
@@ -509,10 +592,13 @@ test("does not merge dependents for same-name components", async () => {
 });
 
 test("supports include and exclude scan options", async () => {
-    const components = await listComponents(fixturePath, {
+    const result = await listComponents(fixturePath, {
         include: ["src/components/*.tsx"],
         exclude: ["**/Unused.tsx"],
+        limit: 100,
+        mode: "full",
     });
+    const components = result.items;
     const names = components.map(component => component.name);
 
     assert.ok(names.includes("Button"));
@@ -521,10 +607,13 @@ test("supports include and exclude scan options", async () => {
 });
 
 test("supports src include patterns across components, pages, and app", async () => {
-    const components = await listComponents(fixturePath, {
+    const result = await listComponents(fixturePath, {
         include: ["src/**/*.tsx"],
         exclude: ["**/*.stories.tsx", "**/*.test.tsx", "**/*.spec.tsx"],
+        limit: 100,
+        mode: "full",
     });
+    const components = result.items;
     const names = sortedNames(components);
 
     assert.ok(names.includes("Button"));
@@ -566,7 +655,7 @@ test("excludes story and test usages when requested", async () => {
 });
 
 test("applies default scan excludes", async () => {
-    const components = await listComponents(fixturePath);
+    const components = await listAllComponents();
     const names = sortedNames(components);
 
     assert.ok(!names.includes("IgnoredStorybookComponent"));

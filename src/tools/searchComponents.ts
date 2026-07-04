@@ -11,17 +11,99 @@ import {
     ComponentInfo,
     ComponentNotFound,
     ComponentUsage,
+    ComponentUsageLocation,
     FullComponentInfo,
     InternalComponentInfo,
+    PropInfo,
+    SourceLocation,
     UnusedComponentInfo,
     UnusedComponentRisk,
 } from "../types/ComponentInfo.js";
+import {
+    ComponentOutputField,
+    ComponentOutputOptions,
+    ComponentOutputMode,
+    DEFAULT_OUTPUT_LIMIT,
+    PaginatedResult,
+} from "../types/ComponentOutput.js";
 import type { ScanOptions } from "../types/ScanOptions.js";
 
 type PublicComponentInfo = ComponentInfo & Pick<
     FullComponentInfo,
     "description" | "exported" | "defaultExport"
 >;
+
+type SummaryPropInfo = Pick<PropInfo, "name" | "optional">;
+
+type SummaryComponentInfo = Omit<
+    PublicComponentInfo,
+    "declaration" | "props"
+> & {
+    props: SummaryPropInfo[];
+};
+
+type SearchSummaryComponentInfo = SummaryComponentInfo &
+    Pick<ComponentUsage, "usageCount">;
+
+type ComponentOutputValue =
+    | string
+    | boolean
+    | number
+    | SourceLocation
+    | PropInfo[]
+    | SummaryPropInfo[]
+    | ComponentUsageLocation[]
+    | undefined;
+
+type ComponentOutputItem = Partial<
+    Record<ComponentOutputField, ComponentOutputValue>
+>;
+
+type BroadToolOptions = ScanOptions & ComponentOutputOptions;
+
+type BroadFullOptions = BroadToolOptions & {
+    mode: "full";
+    fields?: undefined;
+};
+
+type BroadSummaryOptions = BroadToolOptions & {
+    mode?: "summary";
+    fields?: undefined;
+};
+
+type BroadFieldOptions = BroadToolOptions & {
+    fields: ComponentOutputField[];
+};
+
+const listSummaryFields = [
+    "name",
+    "path",
+    "props",
+    "description",
+    "exported",
+    "defaultExport",
+] as const satisfies readonly ComponentOutputField[];
+
+const listFullFields = [
+    "name",
+    "path",
+    "declaration",
+    "props",
+    "description",
+    "exported",
+    "defaultExport",
+] as const satisfies readonly ComponentOutputField[];
+
+const searchSummaryFields = [
+    ...listSummaryFields,
+    "usageCount",
+] as const satisfies readonly ComponentOutputField[];
+
+const searchFullFields = [
+    ...listFullFields,
+    "usageCount",
+    "usedIn",
+] as const satisfies readonly ComponentOutputField[];
 
 function toPublicComponent(
     component: InternalComponentInfo
@@ -35,6 +117,32 @@ function toPublicComponent(
         exported: component.exported,
         defaultExport: component.defaultExport,
     };
+}
+
+function toSummaryProps(props: PropInfo[]): SummaryPropInfo[] {
+    return props.map(prop => ({
+        name: prop.name,
+        optional: prop.optional,
+    }));
+}
+
+function toSummaryComponent(
+    component: InternalComponentInfo
+): SummaryComponentInfo {
+    return {
+        name: component.name,
+        path: component.path,
+        props: toSummaryProps(component.props),
+        description: component.description,
+        exported: component.exported,
+        defaultExport: component.defaultExport,
+    };
+}
+
+function toFullComponent(
+    component: InternalComponentInfo
+): PublicComponentInfo {
+    return toPublicComponent(component);
 }
 
 function matchesQuery(
@@ -108,11 +216,108 @@ function toPublicDependency(
     };
 }
 
+function getOutputMode(options: ComponentOutputOptions): ComponentOutputMode {
+    return options.mode ?? "summary";
+}
+
+function getOutputFields(
+    mode: ComponentOutputMode,
+    options: ComponentOutputOptions,
+    summaryFields: readonly ComponentOutputField[],
+    fullFields: readonly ComponentOutputField[]
+): readonly ComponentOutputField[] {
+    return options.fields ?? (mode === "summary" ? summaryFields : fullFields);
+}
+
+function shouldIncludeUsage(
+    mode: ComponentOutputMode,
+    fields: readonly ComponentOutputField[]
+): boolean {
+    if (mode === "summary") {
+        return fields.includes("usageCount");
+    }
+
+    return fields.includes("usageCount") || fields.includes("usedIn");
+}
+
+function projectOutputFields(
+    item: ComponentOutputItem,
+    fields: readonly ComponentOutputField[]
+): ComponentOutputItem {
+    const projected: ComponentOutputItem = {};
+
+    for (const field of fields) {
+        if (field in item) {
+            projected[field] = item[field];
+        }
+    }
+
+    return projected;
+}
+
+function paginate<TInput, TOutput>(
+    values: TInput[],
+    options: ComponentOutputOptions,
+    mapItem: (item: TInput) => TOutput
+): PaginatedResult<TOutput> {
+    const limit = options.limit ?? DEFAULT_OUTPUT_LIMIT;
+    const offset = options.offset ?? 0;
+    const page = values.slice(offset, offset + limit);
+    const nextOffset =
+        offset + page.length < values.length
+            ? offset + page.length
+            : null;
+
+    return {
+        items: page.map(mapItem),
+        total: values.length,
+        returned: page.length,
+        truncated: nextOffset !== null,
+        nextOffset,
+    };
+}
+
 export async function searchComponents(
     projectPath: string,
     query: string,
-    options: ScanOptions = {}
-): Promise<FullComponentInfo[]> {
+    options: BroadFieldOptions
+): Promise<PaginatedResult<ComponentOutputItem>>;
+
+export async function searchComponents(
+    projectPath: string,
+    query: string,
+    options: BroadFullOptions
+): Promise<PaginatedResult<FullComponentInfo>>;
+
+export async function searchComponents(
+    projectPath: string,
+    query: string,
+    options?: BroadSummaryOptions
+): Promise<PaginatedResult<SearchSummaryComponentInfo>>;
+
+export async function searchComponents(
+    projectPath: string,
+    query: string,
+    options: BroadToolOptions
+): Promise<
+    PaginatedResult<
+        ComponentOutputItem |
+        FullComponentInfo |
+        SearchSummaryComponentInfo
+    >
+>;
+
+export async function searchComponents(
+    projectPath: string,
+    query: string,
+    options: BroadToolOptions = {}
+): Promise<
+    PaginatedResult<
+        ComponentOutputItem |
+        FullComponentInfo |
+        SearchSummaryComponentInfo
+    >
+> {
 
     const context = createScanContext(projectPath, options);
     const { components } = context;
@@ -120,25 +325,92 @@ export async function searchComponents(
         matchesQuery(component, query)
     );
 
-    if (matched.length === 0) {
-        return [];
-    }
+    const mode = getOutputMode(options);
+    const fields = getOutputFields(
+        mode,
+        options,
+        searchSummaryFields,
+        searchFullFields
+    );
+    const usageIndex = shouldIncludeUsage(mode, fields)
+        ? context.getUsageIndex()
+        : undefined;
 
-    const usageIndex = context.getUsageIndex();
+    return paginate(matched, options, component => {
+        const usage = usageIndex
+            ? getComponentUsageFromIndex(component, usageIndex)
+            : undefined;
+        const item =
+            mode === "summary"
+                ? {
+                    ...toSummaryComponent(component),
+                    usageCount: usage?.usageCount ?? 0,
+                }
+                : {
+                    ...toFullComponent(component),
+                    ...(usage ?? {
+                        usageCount: 0,
+                        usedIn: [],
+                    }),
+                };
 
-    return matched.map(component => ({
-        ...toPublicComponent(component),
-        ...getComponentUsageFromIndex(component, usageIndex),
-    }));
+        return projectOutputFields(item, fields);
+    });
 }
 
 export async function listComponents(
     projectPath: string,
-    options: ScanOptions = {}
-): Promise<PublicComponentInfo[]> {
-    const { components } = createScanContext(projectPath, options);
+    options: BroadFieldOptions
+): Promise<PaginatedResult<ComponentOutputItem>>;
 
-    return components.map(toPublicComponent);
+export async function listComponents(
+    projectPath: string,
+    options: BroadFullOptions
+): Promise<PaginatedResult<PublicComponentInfo>>;
+
+export async function listComponents(
+    projectPath: string,
+    options?: BroadSummaryOptions
+): Promise<PaginatedResult<SummaryComponentInfo>>;
+
+export async function listComponents(
+    projectPath: string,
+    options: BroadToolOptions
+): Promise<
+    PaginatedResult<
+        ComponentOutputItem |
+        PublicComponentInfo |
+        SummaryComponentInfo
+    >
+>;
+
+export async function listComponents(
+    projectPath: string,
+    options: BroadToolOptions = {}
+): Promise<
+    PaginatedResult<
+        ComponentOutputItem |
+        PublicComponentInfo |
+        SummaryComponentInfo
+    >
+> {
+    const { components } = createScanContext(projectPath, options);
+    const mode = getOutputMode(options);
+    const fields = getOutputFields(
+        mode,
+        options,
+        listSummaryFields,
+        listFullFields
+    );
+
+    return paginate(components, options, component => {
+        const item =
+            mode === "summary"
+                ? toSummaryComponent(component)
+                : toFullComponent(component);
+
+        return projectOutputFields(item, fields);
+    });
 }
 
 export async function getComponent(

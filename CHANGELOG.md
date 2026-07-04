@@ -6,10 +6,12 @@
 
 - Added a packaged MCP smoke test that installs the packed tarball and verifies the stdio handshake, tool listing, and `list_components`.
 - Added CI coverage for Node.js 20 and 22, packaged smoke testing, and `npm pack --dry-run`.
+- Added `limit`, `offset`, `mode`, and `fields` output controls for broad component tools.
 
 ### Changed
 
 - Refactored component tools to share a per-call scan context, avoiding repeated full usage scans without changing MCP response shapes.
+- Changed `list_components` and `search_components` to return paginated envelopes with a default `summary` mode and `limit` of 20.
 
 ## v1.0.1
 

@@ -69,7 +69,69 @@ Default excludes:
 - `**/.next/**`
 - `**/storybook-static/**`
 
+## Broad Output Options
+
+`list_components` and `search_components` return paginated broad responses.
+They accept:
+
+- `limit`: max returned components, default `20`.
+- `offset`: zero-based result offset, default `0`.
+- `mode`: `summary` or `full`, default `summary`.
+- `fields`: optional top-level component fields to include.
+
+Supported `fields` values:
+
+- `name`
+- `path`
+- `declaration`
+- `props`
+- `description`
+- `exported`
+- `defaultExport`
+- `usageCount`
+- `usedIn`
+
+`summary` mode keeps props compact as `{ "name": "...", "optional": false }`
+and does not include full prop types. For `search_components`, summary mode
+includes `usageCount` by default but not `usedIn`.
+Request `usedIn` with `mode: "full"`.
+
+Use `mode: "full"` with an explicit larger `limit` when you need the old full
+component shape for many components.
+
 ## Response Shapes
+
+### Paginated Broad Response
+
+```json
+{
+  "items": [],
+  "total": 42,
+  "returned": 20,
+  "truncated": true,
+  "nextOffset": 20
+}
+```
+
+`nextOffset` is `null` when there are no more results.
+
+### Summary Component
+
+```json
+{
+  "name": "Button",
+  "path": "C:/project/src/components/Button.tsx",
+  "props": [
+    {
+      "name": "title",
+      "optional": false
+    }
+  ],
+  "description": "Primary button component",
+  "exported": true,
+  "defaultExport": false
+}
+```
 
 ### Component
 
@@ -132,7 +194,7 @@ when the edge comes from `lazy(() => import(...))` or `React.lazy`.
 
 ### `search_components`
 
-Searches React components and returns props, metadata, and JSX usages.
+Searches React components and returns paginated props and usage metadata.
 
 Search includes:
 
@@ -148,26 +210,36 @@ Input:
 {
   "projectPath": "C:/absolute/path/to/react-project",
   "query": "button",
+  "limit": 20,
+  "offset": 0,
+  "mode": "summary",
   "include": ["src/**/*.tsx"],
   "exclude": ["**/*.test.tsx"]
 }
 ```
 
 `query` is optional. If omitted or empty, all components are returned.
+By default, each item includes compact props and `usageCount`. Use
+`mode: "full"` to include full prop types and `usedIn` usage locations.
 
 ### `list_components`
 
-Lists React components with props and metadata. This tool does not scan usages.
+Lists React components with paginated props and metadata. This tool does not
+scan usages.
 
 Input:
 
 ```json
 {
-  "projectPath": "C:/absolute/path/to/react-project"
+  "projectPath": "C:/absolute/path/to/react-project",
+  "limit": 20,
+  "offset": 0,
+  "mode": "summary"
 }
 ```
 
 Use this when you only need the component inventory.
+Use `mode: "full"` for declaration locations and full prop types.
 
 ### `get_component`
 
@@ -459,6 +531,7 @@ Covered cases:
 - unused component risk
 - component dependencies and dependents
 - `include` and `exclude` scan filters
+- broad response pagination, `summary`/`full` modes, and field filtering
 
 Run:
 

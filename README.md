@@ -111,15 +111,17 @@ After connecting the server, pass the target React project path in tool argument
 {
   "tool": "list_components",
   "arguments": {
-    "projectPath": "C:/absolute/path/to/target-react-project"
+    "projectPath": "C:/absolute/path/to/target-react-project",
+    "limit": 20,
+    "mode": "summary"
   }
 }
 ```
 
 ## Tools
 
-- `search_components` - search components by name, path, description, prop names, and prop types.
-- `list_components` - list detected components with props and metadata.
+- `search_components` - search paginated components by name, path, description, prop names, and prop types.
+- `list_components` - list detected components with paginated props and metadata.
 - `get_component` - get one component by exact name.
 - `find_component_usages` - find JSX usages for one component.
 - `find_unused_components` - find components without external JSX usages.

@@ -4,24 +4,27 @@ See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detaile
 
 ## Now
 
-Focus: token-safe broad responses.
+Focus: unused-component correctness.
 
-- Add output limits, pagination or cursors, `summary` mode, and field selection for broad responses.
+- Make `find_unused_components` more explicit about usage kinds, confidence, and "no known usages" risk.
 - Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
 
 ## Next
 
-- Make `find_unused_components` more explicit about usage kinds, confidence, and "no known usages" risk.
+- Expand scanner coverage for class components, configured HOCs, anonymous default exports, styled factories, and deeper props extraction.
 
 ## Later
 
-- Expand scanner coverage for class components, configured HOCs, anonymous default exports, styled factories, and deeper props extraction.
 - Improve cache lifecycle for long-running MCP sessions, including refresh behavior and bounded project caching.
 - Add agent-facing tools for compact component reports and dependency graph navigation.
 - Run a full release pass after functional changes, including package metadata, docs, changelog, package dry-run, and git status.
 
 ## Completed
 
+- Token-safe broad responses:
+  - `list_components` and `search_components` return paginated envelopes;
+  - default broad output is `summary` mode with `limit: 20`;
+  - callers can request `full` mode, offsets, larger limits, and selected fields.
 - Shared ScanContext:
   - public tools now share one per-call scan context;
   - wide `search_components` and `find_unused_components` avoid repeated full usage scans;
