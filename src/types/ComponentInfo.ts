@@ -35,10 +35,34 @@ export interface ComponentUsage {
     usedIn: ComponentUsageLocation[];
 }
 
-export type UnusedComponentRisk = "low" | "medium" | "high";
+export type ComponentReferenceKind =
+    | "react_create_element"
+    | "value_reference"
+    | "route_config_reference"
+    | "dynamic_reference"
+    | "lazy_import";
+
+export interface ComponentReferenceLocation {
+    filePath: string;
+    line: number;
+    column: number;
+    kind: ComponentReferenceKind;
+    text: string;
+}
+
+export type UnusedComponentConfidence = "low" | "medium" | "high";
+
+export type UnusedComponentRisk = UnusedComponentConfidence;
+
+export type UnusedComponentReason =
+    | "no_known_external_usages"
+    | "no_external_jsx_usages_but_has_known_references";
 
 export interface UnusedComponentInfo extends FullComponentInfo {
-    reason: "no_external_jsx_usages";
+    reason: UnusedComponentReason;
+    usageKinds: ComponentReferenceKind[];
+    references: ComponentReferenceLocation[];
+    confidence: UnusedComponentConfidence;
     risk: UnusedComponentRisk;
 }
 

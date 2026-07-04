@@ -2,6 +2,9 @@ import { getComponentKey } from "../services/componentResolver.js";
 import type {
     InternalComponentDependency,
 } from "../services/dependencyScanner.js";
+import {
+    getComponentReferencesFromIndex,
+} from "../services/componentReferenceScanner.js";
 import { createScanContext } from "../services/scanContext.js";
 import { getComponentUsageFromIndex } from "../services/usageScanner.js";
 import {
@@ -10,14 +13,17 @@ import {
     ComponentDependency,
     ComponentInfo,
     ComponentNotFound,
+    ComponentReferenceKind,
+    ComponentReferenceLocation,
     ComponentUsage,
     ComponentUsageLocation,
     FullComponentInfo,
     InternalComponentInfo,
     PropInfo,
     SourceLocation,
+    UnusedComponentConfidence,
     UnusedComponentInfo,
-    UnusedComponentRisk,
+    UnusedComponentReason,
 } from "../types/ComponentInfo.js";
 import {
     ComponentOutputField,
@@ -175,9 +181,14 @@ function matchesName(
     return component.name.toLowerCase() === componentName.toLowerCase();
 }
 
-function getUnusedRisk(
-    component: InternalComponentInfo
-): UnusedComponentRisk {
+function getUnusedConfidence(
+    component: InternalComponentInfo,
+    references: ComponentReferenceLocation[]
+): UnusedComponentConfidence {
+    if (references.length > 0) {
+        return "low";
+    }
+
     if (!component.exported && !component.defaultExport) {
         return "high";
     }
@@ -187,6 +198,63 @@ function getUnusedRisk(
     }
 
     return "medium";
+}
+
+function getUnusedReason(
+    references: ComponentReferenceLocation[]
+): UnusedComponentReason {
+    if (references.length > 0) {
+        return "no_external_jsx_usages_but_has_known_references";
+    }
+
+    return "no_known_external_usages";
+}
+
+function getUsageKinds(
+    references: ComponentReferenceLocation[]
+): ComponentReferenceKind[] {
+    const usageKinds: ComponentReferenceKind[] = [];
+    const seen = new Set<ComponentReferenceKind>();
+
+    for (const reference of references) {
+        if (seen.has(reference.kind)) {
+            continue;
+        }
+
+        usageKinds.push(reference.kind);
+        seen.add(reference.kind);
+    }
+
+    return usageKinds;
+}
+
+function getLazyImportReferences(
+    component: InternalComponentInfo,
+    dependenciesByComponent: Map<string, InternalComponentDependency[]>
+): ComponentReferenceLocation[] {
+    const componentKey = getComponentKey(component);
+    const references: ComponentReferenceLocation[] = [];
+
+    for (const dependencies of dependenciesByComponent.values()) {
+        for (const dependency of dependencies) {
+            if (dependency.componentKey !== componentKey) {
+                continue;
+            }
+
+            for (const usage of dependency.usages) {
+                if (usage.kind !== "lazy_import") {
+                    continue;
+                }
+
+                references.push({
+                    ...usage,
+                    kind: "lazy_import",
+                });
+            }
+        }
+    }
+
+    return references;
 }
 
 function getComponentByName(
@@ -469,6 +537,8 @@ export async function findUnusedComponents(
     const context = createScanContext(projectPath, options);
     const { components } = context;
     const usageIndex = context.getUsageIndex();
+    const referenceIndex = context.getReferenceIndex();
+    const dependencyMap = context.getDependencyMap();
     const result: UnusedComponentInfo[] = [];
 
     for (const component of components) {
@@ -478,11 +548,20 @@ export async function findUnusedComponents(
             continue;
         }
 
+        const references = [
+            ...getComponentReferencesFromIndex(component, referenceIndex),
+            ...getLazyImportReferences(component, dependencyMap),
+        ];
+        const confidence = getUnusedConfidence(component, references);
+
         result.push({
             ...toPublicComponent(component),
             ...usage,
-            reason: "no_external_jsx_usages",
-            risk: getUnusedRisk(component),
+            reason: getUnusedReason(references),
+            usageKinds: getUsageKinds(references),
+            references,
+            confidence,
+            risk: confidence,
         });
     }
 

@@ -7,11 +7,13 @@
 - Added a packaged MCP smoke test that installs the packed tarball and verifies the stdio handshake, tool listing, and `list_components`.
 - Added CI coverage for Node.js 20 and 22, packaged smoke testing, and `npm pack --dry-run`.
 - Added `limit`, `offset`, `mode`, and `fields` output controls for broad component tools.
+- Added non-JSX reference metadata, usage kinds, and confidence to `find_unused_components`.
 
 ### Changed
 
 - Refactored component tools to share a per-call scan context, avoiding repeated full usage scans without changing MCP response shapes.
 - Changed `list_components` and `search_components` to return paginated envelopes with a default `summary` mode and `limit` of 20.
+- Changed `find_unused_components` wording from absolute unused detection toward "no known external usages" candidates.
 
 ## v1.0.1
 

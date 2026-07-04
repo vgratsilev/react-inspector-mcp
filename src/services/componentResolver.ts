@@ -9,6 +9,7 @@ const maxAliasResolutionDepth = 10;
 
 export interface ComponentResolver {
     resolveJsxTag(tagNameNode: Node): InternalComponentInfo | undefined;
+    resolveReference(referenceNode: Node): InternalComponentInfo | undefined;
     resolveLazyImport(
         sourceFile: SourceFile,
         moduleSpecifier: string,
@@ -243,6 +244,26 @@ export function createComponentResolver(
                 return getUniqueComponentByName(
                     componentsByName,
                     getFallbackName(tagNameNode)
+                );
+            }
+
+            const resolvedSymbol = resolveAliasedSymbol(symbol);
+
+            return (
+                componentsBySymbol.get(resolvedSymbol) ??
+                resolveByDeclarations(resolvedSymbol)
+            );
+        },
+
+        resolveReference(
+            referenceNode: Node
+        ): InternalComponentInfo | undefined {
+            const symbol = referenceNode.getSymbol();
+
+            if (!symbol) {
+                return getUniqueComponentByName(
+                    componentsByName,
+                    referenceNode.getText()
                 );
             }
 

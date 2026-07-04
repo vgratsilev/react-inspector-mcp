@@ -2,6 +2,12 @@ import path from "node:path";
 import type { Project, SourceFile } from "ts-morph";
 
 import { scanComponentsInSourceFiles } from "./componentScanner.js";
+import {
+    buildComponentReferenceIndex,
+} from "./componentReferenceScanner.js";
+import type {
+    ComponentReferenceIndex,
+} from "./componentReferenceScanner.js";
 import { createComponentResolver } from "./componentResolver.js";
 import type { ComponentResolver } from "./componentResolver.js";
 import { buildDependencyMap } from "./dependencyScanner.js";
@@ -19,6 +25,7 @@ export interface ScanContext {
     components: InternalComponentInfo[];
     resolver: ComponentResolver;
     getUsageIndex(): UsageIndex;
+    getReferenceIndex(): ComponentReferenceIndex;
     getDependencyMap(): DependencyMap;
 }
 
@@ -38,6 +45,7 @@ export function createScanContext(
     const components = scanComponentsInSourceFiles(sourceFiles);
     const resolver = createComponentResolver(components);
     let usageIndex: UsageIndex | undefined;
+    let referenceIndex: ComponentReferenceIndex | undefined;
     let dependencyMap: DependencyMap | undefined;
 
     return {
@@ -53,6 +61,15 @@ export function createScanContext(
             );
 
             return usageIndex;
+        },
+        getReferenceIndex(): ComponentReferenceIndex {
+            referenceIndex ??= buildComponentReferenceIndex(
+                sourceFiles,
+                components,
+                resolver
+            );
+
+            return referenceIndex;
         },
         getDependencyMap(): DependencyMap {
             dependencyMap ??= buildDependencyMap(components, resolver);

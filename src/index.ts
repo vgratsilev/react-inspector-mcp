@@ -230,7 +230,7 @@ server.setRequestHandler(
             {
                 name: "find_unused_components",
                 description:
-                    "Find React components that have no JSX usages outside their declaration file",
+                    "Find React components with no known external JSX usages and report confidence plus non-JSX references",
                 inputSchema: {
                     type: "object",
                     properties: projectPathInputSchema,

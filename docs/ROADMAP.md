@@ -4,23 +4,25 @@ See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detaile
 
 ## Now
 
-Focus: unused-component correctness.
+Focus: scanner coverage.
 
-- Make `find_unused_components` more explicit about usage kinds, confidence, and "no known usages" risk.
+- Expand scanner coverage for class components, configured HOCs, anonymous default exports, styled factories, and deeper props extraction.
 - Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
 
 ## Next
 
-- Expand scanner coverage for class components, configured HOCs, anonymous default exports, styled factories, and deeper props extraction.
+- Improve cache lifecycle for long-running MCP sessions, including refresh behavior and bounded project caching.
 
 ## Later
 
-- Improve cache lifecycle for long-running MCP sessions, including refresh behavior and bounded project caching.
 - Add agent-facing tools for compact component reports and dependency graph navigation.
 - Run a full release pass after functional changes, including package metadata, docs, changelog, package dry-run, and git status.
 
 ## Completed
 
+- Unused-component correctness:
+  - `find_unused_components` now reports usage kinds, known non-JSX references, confidence, and clearer "no known usages" reasons;
+  - JSX-only usage tools keep their existing `usageCount` and `usedIn` behavior.
 - Token-safe broad responses:
   - `list_components` and `search_components` return paginated envelopes;
   - default broad output is `summary` mode with `limit: 20`;

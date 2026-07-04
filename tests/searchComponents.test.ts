@@ -339,10 +339,90 @@ test("finds components without external JSX usages", async () => {
     assert.ok(names.includes("Unused"));
     assert.ok(names.includes("LocalOnly"));
     assert.ok(!names.includes("Button"));
-    assert.equal(unused?.reason, "no_external_jsx_usages");
+    assert.equal(unused?.reason, "no_known_external_usages");
+    assert.equal(unused?.confidence, "medium");
     assert.equal(unused?.risk, "medium");
+    assert.deepEqual(unused?.usageKinds, []);
+    assert.deepEqual(unused?.references, []);
     assert.equal(defaultPanel?.risk, "low");
     assert.equal(layoutWatermark?.risk, "high");
+});
+
+test("reports non-JSX references for unused component candidates", async () => {
+    const components = await findUnusedComponents(fixturePath);
+    const cases = [
+        ["CreateElementOnly", "react_create_element"],
+        ["PropOnly", "value_reference"],
+        ["RouteConfigOnly", "route_config_reference"],
+        ["RegistryOnly", "value_reference"],
+        ["ObjectRegistryOnly", "value_reference"],
+        ["DynamicOnly", "dynamic_reference"],
+    ] as const;
+
+    for (const [componentName, expectedKind] of cases) {
+        const component = components.find(candidate =>
+            candidate.name === componentName
+        );
+
+        assert.ok(component, componentName);
+        assert.equal(
+            component.reason,
+            "no_external_jsx_usages_but_has_known_references"
+        );
+        assert.equal(component.confidence, "low");
+        assert.equal(component.risk, "low");
+        assert.deepEqual(component.usageKinds, [expectedKind]);
+        assert.equal(component.references.length, 1);
+        assert.equal(component.references[0]?.kind, expectedKind);
+        assert.equal(component.references[0]?.text, componentName);
+    }
+});
+
+test("reports lazy import references for unused component candidates", async () => {
+    const components = await findUnusedComponents(fixturePath);
+    const namedPanel = components.find(component =>
+        component.name === "NamedPanel"
+    );
+
+    assert.ok(namedPanel);
+    assert.equal(
+        namedPanel.reason,
+        "no_external_jsx_usages_but_has_known_references"
+    );
+    assert.equal(namedPanel.confidence, "low");
+    assert.ok(namedPanel.usageKinds.includes("lazy_import"));
+    assert.ok(
+        namedPanel.references.some(reference =>
+            reference.kind === "lazy_import"
+        )
+    );
+});
+
+test("keeps non-JSX references out of usage tools", async () => {
+    const usage = await findComponentUsages(
+        fixturePath,
+        "CreateElementOnly"
+    );
+    const search = await searchComponents(
+        fixturePath,
+        "CreateElementOnly",
+        {
+            mode: "full",
+        }
+    );
+    const component = search.items.find(candidate =>
+        candidate.name === "CreateElementOnly"
+    );
+
+    if ("found" in usage) {
+        assert.fail(usage.message);
+    }
+
+    assert.equal(usage.usageCount, 0);
+    assert.deepEqual(usage.usedIn, []);
+    assert.ok(component);
+    assert.equal(component.usageCount, 0);
+    assert.deepEqual(component.usedIn, []);
 });
 
 test("unused component lookup scans JSX usages once per included source file", async (t) => {

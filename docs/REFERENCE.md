@@ -310,18 +310,26 @@ Output when the component is not found:
 
 ### `find_unused_components`
 
-Finds React components that have no JSX usages outside their declaration file.
+Finds React components that have no external JSX usages and reports whether
+known non-JSX references make the result risky. This tool reports candidates
+with "no known external usages"; it does not prove that a component is safe to
+delete.
 
 Output includes:
 
-- `reason`: currently `no_external_jsx_usages`
-- `risk`: `high`, `medium`, or `low`
+- `reason`: `no_known_external_usages` or
+  `no_external_jsx_usages_but_has_known_references`
+- `usageKinds`: known non-JSX reference kinds found for the component
+- `references`: source locations for known non-JSX references
+- `confidence`: `high`, `medium`, or `low`
+- `risk`: legacy alias for `confidence`
 
-Risk rules:
+Confidence rules:
 
-- `high`: component is not exported and has no external JSX usages
-- `medium`: component is exported and has no external JSX usages
-- `low`: component is default-exported and has no external JSX usages
+- `low`: component has known non-JSX references
+- `low`: component is default-exported
+- `medium`: component is named-exported
+- `high`: local component has no known external usages
 
 Input:
 
@@ -348,8 +356,19 @@ Output:
     "defaultExport": false,
     "usageCount": 0,
     "usedIn": [],
-    "reason": "no_external_jsx_usages",
-    "risk": "medium"
+    "reason": "no_external_jsx_usages_but_has_known_references",
+    "usageKinds": ["route_config_reference"],
+    "references": [
+      {
+        "filePath": "C:/project/src/routes.ts",
+        "line": 8,
+        "column": 16,
+        "kind": "route_config_reference",
+        "text": "OldButton"
+      }
+    ],
+    "confidence": "low",
+    "risk": "low"
   }
 ]
 ```
@@ -500,7 +519,17 @@ Usages are counted only when a component reference appears inside:
 - `JsxOpeningElement`, for example `<Button></Button>`
 - `JsxSelfClosingElement`, for example `<Button />`
 
-The scanner intentionally ignores imports, exports, type references, arrays, and other non-JSX references.
+The JSX usage tools intentionally ignore imports, exports, type references,
+arrays, and other non-JSX references.
+
+`find_unused_components` additionally reports known non-JSX runtime references
+without adding them to `usageCount` or `usedIn`. Reference kind values:
+
+- `react_create_element`: `React.createElement(Component)` or `createElement(Component)`
+- `value_reference`: JSX prop values, arrays, objects, or assignments containing a component value
+- `route_config_reference`: route/config object properties such as `component`, `Component`, or `element`
+- `dynamic_reference`: component values passed into non-React calls
+- `lazy_import`: dependency graph lazy import references
 
 Usage resolution follows TypeScript symbols where possible, so alias imports and barrel exports are supported when the target project's `tsconfig.json` can resolve them.
 
@@ -523,6 +552,7 @@ Covered cases:
 - declaration locations
 - JSX usage tracking
 - ignored non-JSX references
+- non-JSX reference metadata for `find_unused_components`
 - alias imports and barrel exports
 - re-export chains
 - same-name components in dependency graphs
