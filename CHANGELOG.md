@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## v1.1.0 - 2026-07-05
+
 ### Added
 
 - Added a packaged MCP smoke test that installs the packed tarball and verifies the stdio handshake, tool listing, and `list_components`.

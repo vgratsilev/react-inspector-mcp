@@ -1,16 +1,19 @@
 # Roadmap
 
-See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detailed tool behavior, and the [iterative update plan](ITERATIVE_UPDATE_PLAN.md) for the full staged update path.
+See [README](../README.md) for setup and [tool reference](REFERENCE.md) for detailed tool behavior.
 
 ## Now
 
-Focus: release pass.
-
-- Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
+- Publish `v1.1.0`:
+  - run the final release checks;
+  - commit the release metadata;
+  - tag and push `v1.1.0`;
+  - publish the package to npm;
+  - create the GitHub Release.
 
 ## Next
 
-- Decide whether to publish the next package version.
+- Verify npm/npx startup after publication and revisit release feedback.
 
 ## Later
 
@@ -18,6 +21,10 @@ Focus: release pass.
 
 ## Completed
 
+- Release pass:
+  - prepared `v1.1.0` release metadata;
+  - kept release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`;
+  - confirmed the publication decision for `v1.1.0`.
 - Agent-facing tools:
   - added `get_component_report` for compact props, usages, dependencies, dependents, and risk in one call;
   - added `get_dependency_graph` with bounded depth, direction, and node limits.
