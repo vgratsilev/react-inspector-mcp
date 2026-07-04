@@ -4,16 +4,12 @@ See [README](../README.md) for setup and [tool reference](REFERENCE.md) for deta
 
 ## Now
 
-- Publish `v1.1.0`:
-  - run the final release checks;
-  - commit the release metadata;
-  - tag and push `v1.1.0`;
-  - publish the package to npm;
-  - create the GitHub Release.
+- Verify the published `v1.1.0` package through npm/npx startup.
+- Collect release feedback and issue reports.
 
 ## Next
 
-- Verify npm/npx startup after publication and revisit release feedback.
+- Plan the next focused scanner or agent-workflow iteration from real project feedback.
 
 ## Later
 
@@ -21,6 +17,10 @@ See [README](../README.md) for setup and [tool reference](REFERENCE.md) for deta
 
 ## Completed
 
+- Published `v1.1.0`:
+  - pushed release commit `0fffae4` and tag `v1.1.0`;
+  - published `react-inspector-mcp@1.1.0` to npm with the `latest` dist-tag;
+  - created the GitHub Release for `v1.1.0`.
 - Release pass:
   - prepared `v1.1.0` release metadata;
   - kept release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`;
