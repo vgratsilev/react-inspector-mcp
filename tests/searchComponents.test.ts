@@ -12,6 +12,8 @@ import {
     getComponent,
     getComponentDependencies,
     getComponentDependents,
+    getComponentReport,
+    getDependencyGraph,
     listComponents,
     searchComponents,
 } from "../src/tools/searchComponents.js";
@@ -880,6 +882,185 @@ test("does not merge dependents for same-name components", async () => {
         dashboard.usages.map(usage => usage.text),
         expectedDashboardUsages
     );
+});
+
+test("returns compact component report for a used component", async () => {
+    const result = await getComponentReport(fixturePath, "Dashboard");
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    assert.equal(result.component.name, "Dashboard");
+    assert.deepEqual(
+        result.dependencies.map(dependency => dependency.name).sort(),
+        ["Button", "Icon", "LazyPanel", "MemoBadge"]
+    );
+    assert.ok(
+        result.dependents.some(dependent =>
+            dependent.name === "DashboardPage"
+        )
+    );
+    assert.equal(result.usages.usageCount, 1);
+    assert.equal(result.risk.candidate, false);
+    assert.equal(result.risk.confidence, null);
+    assert.equal(result.risk.reason, "has_external_jsx_usages");
+    assert.ok(!("text" in (result.usages.locations[0] ?? {})));
+});
+
+test("returns component report risk for unused candidates", async () => {
+    const result = await getComponentReport(fixturePath, "Unused");
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    assert.equal(result.usages.usageCount, 0);
+    assert.equal(result.risk.candidate, true);
+    assert.equal(result.risk.confidence, "medium");
+    assert.equal(result.risk.reason, "no_known_external_usages");
+    assert.deepEqual(result.risk.usageKinds, []);
+    assert.deepEqual(result.risk.references, []);
+});
+
+test("reports non-JSX references in component reports", async () => {
+    const compact = await getComponentReport(
+        fixturePath,
+        "RouteConfigOnly",
+        { locationLimit: 1 }
+    );
+    const withText = await getComponentReport(
+        fixturePath,
+        "RouteConfigOnly",
+        { includeSourceText: true, locationLimit: 1 }
+    );
+
+    if ("found" in compact) {
+        assert.fail(compact.message);
+    }
+
+    if ("found" in withText) {
+        assert.fail(withText.message);
+    }
+
+    assert.equal(compact.risk.candidate, true);
+    assert.equal(compact.risk.confidence, "low");
+    assert.deepEqual(compact.risk.usageKinds, ["route_config_reference"]);
+    assert.equal(compact.risk.referenceCount, 1);
+    assert.equal(compact.risk.returnedReferences, 1);
+    assert.equal(compact.risk.references[0]?.kind, "route_config_reference");
+    assert.ok(!("text" in (compact.risk.references[0] ?? {})));
+    assert.equal(withText.risk.references[0]?.text, "RouteConfigOnly");
+});
+
+test("limits component report locations and can include source text", async () => {
+    const result = await getComponentReport(fixturePath, "Button", {
+        includeSourceText: true,
+        locationLimit: 2,
+    });
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    assert.equal(result.usages.usageCount, 4);
+    assert.equal(result.usages.returned, 2);
+    assert.equal(result.usages.locations.length, 2);
+    assert.ok(
+        result.usages.locations.every(location =>
+            typeof location.text === "string"
+        )
+    );
+});
+
+test("returns dependency graph by depth and direction", async () => {
+    const rootOnly = await getDependencyGraph(fixturePath, "Dashboard", {
+        depth: 0,
+    });
+    const dependencies = await getDependencyGraph(
+        fixturePath,
+        "Dashboard",
+        {
+            depth: 1,
+            direction: "dependencies",
+        }
+    );
+
+    if ("found" in rootOnly) {
+        assert.fail(rootOnly.message);
+    }
+
+    if ("found" in dependencies) {
+        assert.fail(dependencies.message);
+    }
+
+    assert.equal(rootOnly.nodes.length, 1);
+    assert.equal(rootOnly.edges.length, 0);
+    assert.equal(dependencies.direction, "dependencies");
+    assert.equal(dependencies.depth, 1);
+    assert.deepEqual(
+        dependencies.nodes.map(node => node.name).sort(),
+        ["Button", "Dashboard", "Icon", "LazyPanel", "MemoBadge"]
+    );
+    assert.deepEqual(
+        dependencies.edges.map(edge => edge.to.split("#").at(-1)).sort(),
+        ["Button", "Icon", "LazyPanel", "MemoBadge"]
+    );
+    assert.ok(dependencies.edges.every(edge => edge.from === dependencies.root));
+});
+
+test("returns lazy dependency graph edges for dependents", async () => {
+    const result = await getDependencyGraph(fixturePath, "NamedPanel", {
+        depth: 1,
+        direction: "dependents",
+    });
+
+    if ("found" in result) {
+        assert.fail(result.message);
+    }
+
+    assert.deepEqual(
+        result.nodes.map(node => node.name).sort(),
+        ["LazyNamedPanel", "NamedPanel"]
+    );
+    assert.equal(result.edges.length, 1);
+    assert.deepEqual(result.edges[0]?.usageKinds, ["lazy_import"]);
+});
+
+test("does not merge same-name graph nodes and truncates max nodes", async () => {
+    const fullGraph = await getDependencyGraph(
+        fixturePath,
+        "SameNameDashboard",
+        {
+            depth: 1,
+            direction: "dependencies",
+            maxNodes: 10,
+        }
+    );
+    const truncatedGraph = await getDependencyGraph(
+        fixturePath,
+        "SameNameDashboard",
+        {
+            depth: 1,
+            direction: "dependencies",
+            maxNodes: 2,
+        }
+    );
+
+    if ("found" in fullGraph) {
+        assert.fail(fullGraph.message);
+    }
+
+    if ("found" in truncatedGraph) {
+        assert.fail(truncatedGraph.message);
+    }
+
+    const cardNodes = fullGraph.nodes.filter(node => node.name === "Card");
+
+    assert.equal(cardNodes.length, 2);
+    assert.equal(new Set(cardNodes.map(node => node.id)).size, 2);
+    assert.equal(truncatedGraph.truncated, true);
+    assert.equal(truncatedGraph.nodes.length, 2);
 });
 
 test("supports include and exclude scan options", async () => {

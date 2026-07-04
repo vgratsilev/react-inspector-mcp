@@ -47,6 +47,14 @@ export interface ComponentUsage {
     usedIn: ComponentUsageLocation[];
 }
 
+export interface ComponentReportLocation {
+    filePath: string;
+    line: number;
+    column: number;
+    kind: ComponentUsageLocation["kind"] | ComponentReferenceKind;
+    text?: string;
+}
+
 export type ComponentReferenceKind =
     | "react_create_element"
     | "value_reference"
@@ -76,6 +84,110 @@ export interface UnusedComponentInfo extends FullComponentInfo {
     references: ComponentReferenceLocation[];
     confidence: UnusedComponentConfidence;
     risk: UnusedComponentRisk;
+}
+
+export const DEFAULT_REPORT_LOCATION_LIMIT = 20;
+
+export interface ComponentReportOptions {
+    locationLimit?: number;
+    includeSourceText?: boolean;
+}
+
+export type ComponentReportRiskReason =
+    | UnusedComponentReason
+    | "has_external_jsx_usages";
+
+export interface ComponentReportRisk {
+    candidate: boolean;
+    confidence: UnusedComponentConfidence | null;
+    reason: ComponentReportRiskReason;
+    usageKinds: ComponentReferenceKind[];
+    referenceCount: number;
+    returnedReferences: number;
+    references: ComponentReportLocation[];
+}
+
+export interface ComponentReportPropSummary {
+    name: string;
+    optional: boolean;
+    defaultValue?: string;
+}
+
+export interface ComponentReportItem {
+    name: string;
+    kind: ComponentKind;
+    path: string;
+    declaration: SourceLocation;
+    description?: string;
+    exported?: boolean;
+    defaultExport?: boolean;
+}
+
+export interface ComponentReportUsage {
+    usageCount: number;
+    returned: number;
+    locations: ComponentReportLocation[];
+}
+
+export interface ComponentReportDependency {
+    name: string;
+    path: string;
+    usageCount: number;
+    returned: number;
+    usages: ComponentReportLocation[];
+}
+
+export interface ComponentReport {
+    component: ComponentReportItem;
+    propsSummary: ComponentReportPropSummary[];
+    usages: ComponentReportUsage;
+    dependencies: ComponentReportDependency[];
+    dependents: ComponentReportDependency[];
+    risk: ComponentReportRisk;
+}
+
+export const dependencyGraphDirections = [
+    "dependencies",
+    "dependents",
+    "both",
+] as const;
+
+export type DependencyGraphDirection =
+    (typeof dependencyGraphDirections)[number];
+
+export const DEFAULT_DEPENDENCY_GRAPH_MAX_NODES = 50;
+
+export const MAX_DEPENDENCY_GRAPH_DEPTH = 5;
+
+export interface DependencyGraphOptions {
+    direction?: DependencyGraphDirection;
+    depth?: number;
+    maxNodes?: number;
+}
+
+export interface DependencyGraphNode {
+    id: string;
+    name: string;
+    kind: ComponentKind;
+    path: string;
+}
+
+export interface DependencyGraphEdge {
+    from: string;
+    to: string;
+    usageCount: number;
+    returned: number;
+    usageKinds: ComponentUsageLocation["kind"][];
+    usages: ComponentReportLocation[];
+}
+
+export interface DependencyGraph {
+    root: string;
+    nodes: DependencyGraphNode[];
+    edges: DependencyGraphEdge[];
+    depth: number;
+    direction: DependencyGraphDirection;
+    truncated: boolean;
 }
 
 export interface ComponentDependency {

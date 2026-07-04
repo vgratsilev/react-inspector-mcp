@@ -11,6 +11,7 @@
 - Added component `kind` metadata, prop `defaultValue` metadata, and `componentWrappers` scan options.
 - Added scanner coverage for class components, anonymous default exports, styled factories, configured HOCs, and deeper props patterns.
 - Added `refresh_project_cache` for explicit project cache refresh in long-running MCP sessions.
+- Added `get_component_report` and `get_dependency_graph` for compact agent-facing component analysis.
 
 ### Changed
 

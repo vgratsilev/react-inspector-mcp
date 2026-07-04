@@ -118,6 +118,9 @@ Request `usedIn` with `mode: "full"`.
 
 `kind` is one of `function`, `class`, `wrapped`, `lazy`, or `styled`.
 
+For compact navigation in large projects, request only the fields an agent
+needs, for example `fields: ["name", "kind", "path"]`.
+
 Use `mode: "full"` with an explicit larger `limit` when you need the old full
 component shape for many components.
 
@@ -296,6 +299,157 @@ Output when not found:
   "message": "Component \"Button\" was not found in the scanned project."
 }
 ```
+
+### `get_component_report`
+
+Gets one compact agent-facing component report by exact component name. Use
+this for the common task "what is this component and who uses it".
+
+Input:
+
+```json
+{
+  "projectPath": "C:/absolute/path/to/react-project",
+  "componentName": "Button",
+  "locationLimit": 20,
+  "includeSourceText": false
+}
+```
+
+- `locationLimit` defaults to `20` and limits locations in each report section.
+- `includeSourceText` defaults to `false`; when `true`, compact locations also
+  include `text`.
+
+Output:
+
+```json
+{
+  "component": {
+    "name": "Button",
+    "kind": "function",
+    "path": "C:/project/src/components/Button.tsx",
+    "declaration": {
+      "filePath": "C:/project/src/components/Button.tsx",
+      "line": 10,
+      "column": 1
+    },
+    "exported": true,
+    "defaultExport": false
+  },
+  "propsSummary": [
+    {
+      "name": "title",
+      "optional": false
+    }
+  ],
+  "usages": {
+    "usageCount": 4,
+    "returned": 2,
+    "locations": [
+      {
+        "filePath": "C:/project/src/pages/Home.tsx",
+        "line": 12,
+        "column": 9,
+        "kind": "jsx"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "Icon",
+      "path": "C:/project/src/components/Icon.tsx",
+      "usageCount": 1,
+      "returned": 1,
+      "usages": [
+        {
+          "filePath": "C:/project/src/components/Button.tsx",
+          "line": 14,
+          "column": 7,
+          "kind": "jsx"
+        }
+      ]
+    }
+  ],
+  "dependents": [],
+  "risk": {
+    "candidate": false,
+    "confidence": null,
+    "reason": "has_external_jsx_usages",
+    "usageKinds": [],
+    "referenceCount": 0,
+    "returnedReferences": 0,
+    "references": []
+  }
+}
+```
+
+When `risk.candidate` is `true`, `confidence`, `reason`, `usageKinds`, and
+`references` use the same semantics as `find_unused_components`.
+
+### `get_dependency_graph`
+
+Gets a compact dependency graph rooted at one component.
+
+Input:
+
+```json
+{
+  "projectPath": "C:/absolute/path/to/react-project",
+  "componentName": "Dashboard",
+  "direction": "both",
+  "depth": 1,
+  "maxNodes": 50
+}
+```
+
+- `direction`: `dependencies`, `dependents`, or `both`; default `both`.
+- `depth`: graph depth from the root, default `1`, max `5`.
+- `maxNodes`: max returned nodes before truncation, default `50`.
+
+Output:
+
+```json
+{
+  "root": "C:/project/src/components/Dashboard.tsx#Dashboard",
+  "nodes": [
+    {
+      "id": "C:/project/src/components/Dashboard.tsx#Dashboard",
+      "name": "Dashboard",
+      "kind": "function",
+      "path": "C:/project/src/components/Dashboard.tsx"
+    },
+    {
+      "id": "C:/project/src/components/Button.tsx#Button",
+      "name": "Button",
+      "kind": "function",
+      "path": "C:/project/src/components/Button.tsx"
+    }
+  ],
+  "edges": [
+    {
+      "from": "C:/project/src/components/Dashboard.tsx#Dashboard",
+      "to": "C:/project/src/components/Button.tsx#Button",
+      "usageCount": 1,
+      "returned": 1,
+      "usageKinds": ["jsx"],
+      "usages": [
+        {
+          "filePath": "C:/project/src/components/Dashboard.tsx",
+          "line": 8,
+          "column": 7,
+          "kind": "jsx"
+        }
+      ]
+    }
+  ],
+  "depth": 1,
+  "direction": "both",
+  "truncated": false
+}
+```
+
+Graph node ids use `path#name` so same-name components in different files are
+separate nodes. Edge locations are compact and omit source text.
 
 ### `find_component_usages`
 
@@ -650,6 +804,7 @@ Covered cases:
 - `React.FC`, `FC`, generic props, destructuring defaults, and `forwardRef<Ref, Props>`
 - unused component risk
 - component dependencies and dependents
+- compact component reports and bounded dependency graphs
 - `include`, `exclude`, and `componentWrappers` scan filters/options
 - broad response pagination, `summary`/`full` modes, and field filtering
 - cache refresh for added/deleted files and bounded project cache growth

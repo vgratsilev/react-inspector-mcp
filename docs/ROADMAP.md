@@ -4,14 +4,13 @@ See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detaile
 
 ## Now
 
-Focus: agent-facing tools.
+Focus: release pass.
 
-- Add compact component report and dependency graph tools for agent workflows.
 - Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
 
 ## Next
 
-- Run a release pass after functional changes.
+- Decide whether to publish the next package version.
 
 ## Later
 
@@ -19,6 +18,9 @@ Focus: agent-facing tools.
 
 ## Completed
 
+- Agent-facing tools:
+  - added `get_component_report` for compact props, usages, dependencies, dependents, and risk in one call;
+  - added `get_dependency_graph` with bounded depth, direction, and node limits.
 - Cache lifecycle:
   - added `refresh_project_cache`;
   - refreshed added and deleted source files across long-running sessions;

@@ -123,10 +123,15 @@ After connecting the server, pass the target React project path in tool argument
 - `search_components` - search paginated components by name, path, description, prop names, and prop types.
 - `list_components` - list detected components with paginated props and metadata.
 - `get_component` - get one component by exact name.
+- `get_component_report` - get a compact component report with props, usages, dependencies, dependents, and risk.
+- `get_dependency_graph` - get a bounded component dependency graph.
 - `find_component_usages` - find JSX usages for one component.
 - `find_unused_components` - find components without external JSX usages.
 - `get_component_dependencies` - list components used inside one component.
 - `get_component_dependents` - list components that use one component.
+
+For the common agent task "what is this component and who uses it", prefer
+`get_component_report`.
 
 Full tool inputs, outputs, scan rules, and limitations are documented in [docs/REFERENCE.md](docs/REFERENCE.md).
 

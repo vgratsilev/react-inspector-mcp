@@ -14,10 +14,18 @@ import {
     getComponent,
     getComponentDependencies,
     getComponentDependents,
+    getComponentReport,
+    getDependencyGraph,
     listComponents,
     searchComponents,
 } from "./tools/searchComponents.js";
 import { refreshProjectCache } from "./services/projectManager.js";
+import {
+    DEFAULT_DEPENDENCY_GRAPH_MAX_NODES,
+    DEFAULT_REPORT_LOCATION_LIMIT,
+    MAX_DEPENDENCY_GRAPH_DEPTH,
+    dependencyGraphDirections,
+} from "./types/ComponentInfo.js";
 import {
     componentOutputFields,
     componentOutputModes,
@@ -53,6 +61,27 @@ const componentNameSchema = projectPathSchema.extend({
 
 const getComponentSchema = componentNameSchema.extend({
     includeUsages: z.boolean().default(true),
+});
+
+const componentReportSchema = componentNameSchema.extend({
+    locationLimit: z.number()
+        .int()
+        .nonnegative()
+        .default(DEFAULT_REPORT_LOCATION_LIMIT),
+    includeSourceText: z.boolean().default(false),
+});
+
+const dependencyGraphSchema = componentNameSchema.extend({
+    direction: z.enum(dependencyGraphDirections).default("both"),
+    depth: z.number()
+        .int()
+        .min(0)
+        .max(MAX_DEPENDENCY_GRAPH_DEPTH)
+        .default(1),
+    maxNodes: z.number()
+        .int()
+        .positive()
+        .default(DEFAULT_DEPENDENCY_GRAPH_MAX_NODES),
 });
 
 const scanOptionsInputSchema = {
@@ -118,6 +147,14 @@ const outputOptionsInputSchema = {
 const broadToolInputSchema = {
     ...projectPathInputSchema,
     ...outputOptionsInputSchema,
+};
+
+const componentNameInputSchema = {
+    ...projectPathInputSchema,
+    componentName: {
+        type: "string",
+        description: "Exact component name",
+    },
 };
 
 function formatError(error: unknown): string {
@@ -204,16 +241,71 @@ server.setRequestHandler(
                 inputSchema: {
                     type: "object",
                     properties: {
-                        ...projectPathInputSchema,
-                        componentName: {
-                            type: "string",
-                            description: "Exact component name",
-                        },
+                        ...componentNameInputSchema,
                         includeUsages: {
                             type: "boolean",
                             description:
                                 "Whether to include JSX usage locations",
                             default: true,
+                        },
+                    },
+                    required: ["projectPath", "componentName"],
+                },
+            },
+            {
+                name: "get_component_report",
+                description:
+                    "Get a compact agent-facing report for one React component",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        ...componentNameInputSchema,
+                        locationLimit: {
+                            type: "integer",
+                            minimum: 0,
+                            default: DEFAULT_REPORT_LOCATION_LIMIT,
+                            description:
+                                "Maximum usage/reference locations per section.",
+                        },
+                        includeSourceText: {
+                            type: "boolean",
+                            default: false,
+                            description:
+                                "Whether compact locations include source text snippets.",
+                        },
+                    },
+                    required: ["projectPath", "componentName"],
+                },
+            },
+            {
+                name: "get_dependency_graph",
+                description:
+                    "Get a compact component dependency graph with bounded depth",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        ...componentNameInputSchema,
+                        direction: {
+                            type: "string",
+                            enum: [...dependencyGraphDirections],
+                            default: "both",
+                            description:
+                                "Graph direction from the root component.",
+                        },
+                        depth: {
+                            type: "integer",
+                            minimum: 0,
+                            maximum: MAX_DEPENDENCY_GRAPH_DEPTH,
+                            default: 1,
+                            description:
+                                "Maximum graph depth from the root component.",
+                        },
+                        maxNodes: {
+                            type: "integer",
+                            minimum: 1,
+                            default: DEFAULT_DEPENDENCY_GRAPH_MAX_NODES,
+                            description:
+                                "Maximum graph nodes to return before truncating.",
                         },
                     },
                     required: ["projectPath", "componentName"],
@@ -226,11 +318,7 @@ server.setRequestHandler(
                 inputSchema: {
                     type: "object",
                     properties: {
-                        ...projectPathInputSchema,
-                        componentName: {
-                            type: "string",
-                            description: "Exact component name",
-                        },
+                        ...componentNameInputSchema,
                     },
                     required: ["projectPath", "componentName"],
                 },
@@ -252,11 +340,7 @@ server.setRequestHandler(
                 inputSchema: {
                     type: "object",
                     properties: {
-                        ...projectPathInputSchema,
-                        componentName: {
-                            type: "string",
-                            description: "Exact component name",
-                        },
+                        ...componentNameInputSchema,
                     },
                     required: ["projectPath", "componentName"],
                 },
@@ -268,11 +352,7 @@ server.setRequestHandler(
                 inputSchema: {
                     type: "object",
                     properties: {
-                        ...projectPathInputSchema,
-                        componentName: {
-                            type: "string",
-                            description: "Exact component name",
-                        },
+                        ...componentNameInputSchema,
                     },
                     required: ["projectPath", "componentName"],
                 },
@@ -321,6 +401,22 @@ server.setRequestHandler(
                     parsedArgs.projectPath,
                     parsedArgs.componentName,
                     parsedArgs.includeUsages,
+                    parsedArgs
+                );
+            } else if (name === "get_component_report") {
+                const parsedArgs = componentReportSchema.parse(args);
+
+                result = await getComponentReport(
+                    parsedArgs.projectPath,
+                    parsedArgs.componentName,
+                    parsedArgs
+                );
+            } else if (name === "get_dependency_graph") {
+                const parsedArgs = dependencyGraphSchema.parse(args);
+
+                result = await getDependencyGraph(
+                    parsedArgs.projectPath,
+                    parsedArgs.componentName,
                     parsedArgs
                 );
             } else if (name === "find_component_usages") {

@@ -321,6 +321,8 @@ test(
             const toolNames = tools.tools.map(tool => tool.name);
 
             assert.ok(toolNames.includes("list_components"));
+            assert.ok(toolNames.includes("get_component_report"));
+            assert.ok(toolNames.includes("get_dependency_graph"));
             assert.ok(toolNames.includes("refresh_project_cache"));
 
             const listComponentsResult = await client.callTool(
