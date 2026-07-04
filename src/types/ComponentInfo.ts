@@ -1,12 +1,23 @@
 import {
+    ClassDeclaration,
+    ExportAssignment,
     FunctionDeclaration,
+    Node,
     VariableDeclaration
 } from "ts-morph";
+
+export type ComponentKind =
+    | "function"
+    | "class"
+    | "wrapped"
+    | "lazy"
+    | "styled";
 
 export interface PropInfo {
     name: string;
     type: string;
     optional: boolean;
+    defaultValue?: string;
 }
 
 export interface SourceLocation {
@@ -17,6 +28,7 @@ export interface SourceLocation {
 
 export interface ComponentInfo {
     name: string;
+    kind: ComponentKind;
     path: string;
     declaration: SourceLocation;
     props: PropInfo[];
@@ -106,7 +118,12 @@ export interface FullComponentInfo
 export interface InternalComponentInfo
     extends ComponentInfo {
 
-    node: FunctionDeclaration | VariableDeclaration;
+    node:
+        | ClassDeclaration
+        | ExportAssignment
+        | FunctionDeclaration
+        | VariableDeclaration;
+    implementationNode: Node;
 
     description?: string;
     exported?: boolean;

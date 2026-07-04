@@ -15,6 +15,7 @@ import {
 } from "../src/tools/searchComponents.js";
 import { getProject } from "../src/services/projectManager.js";
 import { shouldIncludeFile } from "../src/services/pathMatcher.js";
+import type { PropInfo } from "../src/types/ComponentInfo.js";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const fixturePath = resolve(testDir, "fixtures/react-project");
@@ -179,6 +180,12 @@ test("lists app route components with props and JSDoc metadata", async () => {
 test("detects wrapped memo, forwardRef, and lazy components", async () => {
     const components = await listAllComponents();
     const names = components.map(component => component.name);
+    const memoBadge = components.find(component =>
+        component.name === "MemoBadge"
+    );
+    const lazyPanel = components.find(component =>
+        component.name === "LazyPanel"
+    );
 
     assert.ok(names.includes("MemoBadge"));
     assert.ok(names.includes("ForwardInput"));
@@ -189,6 +196,134 @@ test("detects wrapped memo, forwardRef, and lazy components", async () => {
     assert.ok(names.includes("LazyPanel"));
     assert.ok(names.includes("LazyDefaultPanel"));
     assert.ok(names.includes("LazyNamedPanel"));
+    assert.equal(memoBadge?.kind, "wrapped");
+    assert.equal(lazyPanel?.kind, "lazy");
+});
+
+test("detects class components, anonymous defaults, and styled factories", async () => {
+    const components = await listAllComponents();
+    const classPanel = components.find(component =>
+        component.name === "ClassPanel"
+    );
+    const anonymousDefault = components.find(component =>
+        component.name === "AnonymousDefault"
+    );
+    const styledBox = components.find(component =>
+        component.name === "StyledBox"
+    );
+    const styledWrappedBox = components.find(component =>
+        component.name === "StyledWrappedBox"
+    );
+    const styledAttrsButton = components.find(component =>
+        component.name === "StyledAttrsButton"
+    );
+
+    assert.equal(classPanel?.kind, "class");
+    assert.deepEqual(
+        classPanel?.props.map(prop => ({
+            name: prop.name,
+            optional: prop.optional,
+        })),
+        [
+            { name: "title", optional: false },
+            { name: "compact", optional: true },
+        ]
+    );
+    assert.equal(anonymousDefault?.kind, "function");
+    assert.equal(anonymousDefault?.defaultExport, true);
+    assert.deepEqual(
+        anonymousDefault?.props.map(prop => ({
+            name: prop.name,
+            optional: prop.optional,
+            defaultValue: prop.defaultValue,
+        })),
+        [
+            {
+                name: "label",
+                optional: true,
+                defaultValue: "\"Generated\"",
+            },
+        ]
+    );
+    assert.equal(styledBox?.kind, "styled");
+    assert.equal(styledWrappedBox?.kind, "styled");
+    assert.equal(styledAttrsButton?.kind, "styled");
+});
+
+test("detects arbitrary configured HOC wrappers", async () => {
+    const defaultComponents = await listAllComponents();
+    const configured = await listComponents(fixturePath, {
+        componentWrappers: ["arbitraryHoc"],
+        limit: 100,
+        mode: "full",
+    });
+    const defaultNames = defaultComponents.map(component => component.name);
+    const configuredHocPanel = configured.items.find(component =>
+        component.name === "ConfiguredHocPanel"
+    );
+
+    assert.ok(!defaultNames.includes("ConfiguredHocPanel"));
+    assert.ok(!defaultNames.includes("UnconfiguredHocPanel"));
+    assert.equal(configuredHocPanel?.kind, "wrapped");
+    assert.deepEqual(
+        configuredHocPanel?.props.map(prop => ({
+            name: prop.name,
+            optional: prop.optional,
+        })),
+        [{ name: "status", optional: false }]
+    );
+});
+
+test("extracts React.FC, FC, generic, and forwardRef props", async () => {
+    type PropsExtractionCase = {
+        componentName: string;
+        expectedProps: string[];
+        defaults: Array<readonly [propName: string, defaultValue: string]>;
+    };
+
+    const cases = [
+        {
+            componentName: "FcPanel",
+            expectedProps: ["label", "count"],
+            defaults: [["count", "1"]],
+        },
+        {
+            componentName: "AliasFcPanel",
+            expectedProps: ["title"],
+            defaults: [],
+        },
+        {
+            componentName: "GenericPanel",
+            expectedProps: ["title", "tone"],
+            defaults: [],
+        },
+        {
+            componentName: "GenericForwardRef",
+            expectedProps: ["value", "disabled"],
+            defaults: [["disabled", "false"]],
+        },
+    ] satisfies PropsExtractionCase[];
+
+    for (const { componentName, expectedProps, defaults } of cases) {
+        const component = await getComponent(fixturePath, componentName, false);
+
+        if ("found" in component) {
+            assert.fail(component.message);
+        }
+
+        assert.deepEqual(
+            component.props.map(prop => prop.name),
+            expectedProps
+        );
+
+        for (const [propName, defaultValue] of defaults) {
+            const prop: PropInfo | undefined = component.props.find(candidate =>
+                candidate.name === propName
+            );
+
+            assert.equal(prop?.defaultValue, defaultValue);
+        }
+    }
 });
 
 test("extracts props from nested component wrappers", async () => {

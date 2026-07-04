@@ -17,21 +17,12 @@ export interface LazyImportReference {
 }
 
 function getCallName(callExpression: CallExpression): string {
-    const expression = callExpression.getExpression();
-
-    if (Node.isIdentifier(expression)) {
-        return expression.getText();
-    }
-
-    if (Node.isPropertyAccessExpression(expression)) {
-        return expression.getName();
-    }
-
-    return expression.getText();
+    return callExpression.getExpression().getText();
 }
 
 function isLazyCall(node: Node): node is CallExpression {
-    return Node.isCallExpression(node) && getCallName(node) === "lazy";
+    return Node.isCallExpression(node) &&
+        ["lazy", "React.lazy"].includes(getCallName(node));
 }
 
 function isDynamicImportCall(node: Node): node is CallExpression {
@@ -198,11 +189,16 @@ function getNamedExportFromThenCall(
 export function getLazyImportReference(
     node: ComponentNode
 ): LazyImportReference | undefined {
-    if (!Node.isVariableDeclaration(node)) {
+    if (
+        !Node.isVariableDeclaration(node) &&
+        !Node.isExportAssignment(node)
+    ) {
         return undefined;
     }
 
-    const initializer = node.getInitializer();
+    const initializer = Node.isVariableDeclaration(node)
+        ? node.getInitializer()
+        : node.getExpression();
 
     if (!initializer || !isLazyCall(initializer)) {
         return undefined;

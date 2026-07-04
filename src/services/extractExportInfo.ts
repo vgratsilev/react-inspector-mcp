@@ -4,10 +4,20 @@ import type {ComponentNode} from "../types/ComponentNode.js";
 export function extractExportInfo(
     node: ComponentNode
 ) {
-    if (Node.isFunctionDeclaration(node)) {
+    if (
+        Node.isClassDeclaration(node) ||
+        Node.isFunctionDeclaration(node)
+    ) {
         return {
             exported: node.isExported(),
             defaultExport: node.isDefaultExport(),
+        };
+    }
+
+    if (Node.isExportAssignment(node)) {
+        return {
+            exported: true,
+            defaultExport: !node.isExportEquals(),
         };
     }
 

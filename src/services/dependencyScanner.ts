@@ -1,6 +1,5 @@
 import { Node } from "ts-morph";
 
-import { getComponentImplementationNode } from "./componentNodeUtils.js";
 import { getComponentKey } from "./componentResolver.js";
 import type { ComponentResolver } from "./componentResolver.js";
 import { getLazyImportReference } from "./lazyImportUtils.js";
@@ -42,7 +41,7 @@ function getDependenciesInsideComponent(
     component: InternalComponentInfo,
     resolver: ComponentResolver
 ): InternalComponentDependency[] {
-    const implementationNode = getComponentImplementationNode(component.node);
+    const implementationNode = component.implementationNode;
     const componentKey = getComponentKey(component);
     const dependenciesByKey = new Map<
         string,

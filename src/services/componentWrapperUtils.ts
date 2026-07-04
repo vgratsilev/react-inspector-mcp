@@ -7,54 +7,32 @@ import {
 
 export type ComponentFunction = ArrowFunction | FunctionExpression;
 
-export const SUPPORTED_COMPONENT_WRAPPERS = [
+export const DEFAULT_COMPONENT_WRAPPERS = [
     "memo",
     "React.memo",
     "forwardRef",
     "React.forwardRef",
 ] as const;
 
-type SupportedComponentWrapper =
-    (typeof SUPPORTED_COMPONENT_WRAPPERS)[number];
+export type ComponentWrapperName =
+    | (typeof DEFAULT_COMPONENT_WRAPPERS)[number]
+    | string;
 
-const supportedWrapperNames = new Set<string>(
-    SUPPORTED_COMPONENT_WRAPPERS
-);
-
-function isSupportedComponentWrapperName(
-    name: string
-): name is SupportedComponentWrapper {
-    return supportedWrapperNames.has(name);
+export function createComponentWrapperSet(
+    customWrappers: string[] = []
+): Set<ComponentWrapperName> {
+    return new Set([
+        ...DEFAULT_COMPONENT_WRAPPERS,
+        ...customWrappers
+            .map(wrapper => wrapper.trim())
+            .filter(wrapper => wrapper.length > 0),
+    ]);
 }
 
-function getCallName(
+export function getCallName(
     callExpression: CallExpression
-): SupportedComponentWrapper | undefined {
-    const expression = callExpression.getExpression();
-
-    if (Node.isIdentifier(expression)) {
-        const name = expression.getText();
-
-        return isSupportedComponentWrapperName(name)
-            ? name
-            : undefined;
-    }
-
-    if (Node.isPropertyAccessExpression(expression)) {
-        const owner = expression.getExpression();
-
-        if (!Node.isIdentifier(owner)) {
-            return undefined;
-        }
-
-        const name = `${owner.getText()}.${expression.getName()}`;
-
-        return isSupportedComponentWrapperName(name)
-            ? name
-            : undefined;
-    }
-
-    return undefined;
+): string {
+    return callExpression.getExpression().getText();
 }
 
 function unwrapParenthesizedExpression(node: Node): Node {
@@ -68,13 +46,16 @@ function unwrapParenthesizedExpression(node: Node): Node {
 }
 
 export function isSupportedComponentWrapperCall(
-    node: Node
+    node: Node,
+    wrapperNames: Set<ComponentWrapperName>
 ): node is CallExpression {
-    return Node.isCallExpression(node) && getCallName(node) !== undefined;
+    return Node.isCallExpression(node) &&
+        wrapperNames.has(getCallName(node));
 }
 
 export function unwrapComponentFunction(
-    node: Node
+    node: Node,
+    wrapperNames: Set<ComponentWrapperName>
 ): ComponentFunction | undefined {
     const current = unwrapParenthesizedExpression(node);
 
@@ -85,13 +66,22 @@ export function unwrapComponentFunction(
         return current;
     }
 
-    if (!isSupportedComponentWrapperCall(current)) {
+    if (!isSupportedComponentWrapperCall(current, wrapperNames)) {
         return undefined;
     }
 
     const firstArgument = current.getArguments()[0];
 
     return firstArgument
-        ? unwrapComponentFunction(firstArgument)
+        ? unwrapComponentFunction(firstArgument, wrapperNames)
         : undefined;
+}
+
+export function hasComponentWrapper(
+    node: Node,
+    wrapperNames: Set<ComponentWrapperName>
+): boolean {
+    const current = unwrapParenthesizedExpression(node);
+
+    return isSupportedComponentWrapperCall(current, wrapperNames);
 }

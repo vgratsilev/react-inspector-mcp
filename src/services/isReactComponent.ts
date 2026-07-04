@@ -4,7 +4,9 @@ import {
     getComponentFunction,
     getComponentImplementationNode,
     isLazyComponentDeclaration,
+    isStyledComponentDeclaration,
 } from "./componentNodeUtils.js";
+import type { ComponentWrapperName } from "./componentWrapperUtils.js";
 
 function hasJsx(node: Node): boolean {
     return (
@@ -18,17 +20,28 @@ function hasJsx(node: Node): boolean {
     );
 }
 
-export function isReactComponent(node: ComponentNode): boolean {
+export function isReactComponent(
+    node: ComponentNode,
+    wrapperNames: Set<ComponentWrapperName>
+): boolean {
 
     if (isLazyComponentDeclaration(node)) {
         return true;
     }
 
-    if (Node.isFunctionDeclaration(node)) {
-        return hasJsx(getComponentImplementationNode(node));
+    if (isStyledComponentDeclaration(node)) {
+        return true;
     }
 
-    const componentFunction = getComponentFunction(node);
+    if (Node.isFunctionDeclaration(node)) {
+        return hasJsx(getComponentImplementationNode(node, wrapperNames));
+    }
+
+    if (Node.isClassDeclaration(node)) {
+        return hasJsx(getComponentImplementationNode(node, wrapperNames));
+    }
+
+    const componentFunction = getComponentFunction(node, wrapperNames);
 
     return componentFunction
         ? hasJsx(componentFunction)

@@ -6,6 +6,7 @@ export type ComponentOutputMode = (typeof componentOutputModes)[number];
 
 export const componentOutputFields = [
     "name",
+    "kind",
     "path",
     "declaration",
     "props",

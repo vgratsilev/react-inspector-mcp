@@ -12,6 +12,7 @@ import {
     ComponentDependents,
     ComponentDependency,
     ComponentInfo,
+    ComponentKind,
     ComponentNotFound,
     ComponentReferenceKind,
     ComponentReferenceLocation,
@@ -55,6 +56,7 @@ type ComponentOutputValue =
     | string
     | boolean
     | number
+    | ComponentKind
     | SourceLocation
     | PropInfo[]
     | SummaryPropInfo[]
@@ -83,6 +85,7 @@ type BroadFieldOptions = BroadToolOptions & {
 
 const listSummaryFields = [
     "name",
+    "kind",
     "path",
     "props",
     "description",
@@ -92,6 +95,7 @@ const listSummaryFields = [
 
 const listFullFields = [
     "name",
+    "kind",
     "path",
     "declaration",
     "props",
@@ -116,6 +120,7 @@ function toPublicComponent(
 ): PublicComponentInfo {
     return {
         name: component.name,
+        kind: component.kind,
         path: component.path,
         declaration: component.declaration,
         props: component.props,
@@ -137,6 +142,7 @@ function toSummaryComponent(
 ): SummaryComponentInfo {
     return {
         name: component.name,
+        kind: component.kind,
         path: component.path,
         props: toSummaryProps(component.props),
         description: component.description,

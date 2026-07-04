@@ -4,22 +4,24 @@ See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detaile
 
 ## Now
 
-Focus: scanner coverage.
+Focus: cache lifecycle.
 
-- Expand scanner coverage for class components, configured HOCs, anonymous default exports, styled factories, and deeper props extraction.
+- Improve cache lifecycle for long-running MCP sessions, including refresh behavior and bounded project caching.
 - Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
 
 ## Next
 
-- Improve cache lifecycle for long-running MCP sessions, including refresh behavior and bounded project caching.
+- Add agent-facing tools for compact component reports and dependency graph navigation.
 
 ## Later
 
-- Add agent-facing tools for compact component reports and dependency graph navigation.
 - Run a full release pass after functional changes, including package metadata, docs, changelog, package dry-run, and git status.
 
 ## Completed
 
+- Scanner coverage:
+  - added class components, anonymous default exports, styled factories, and configured HOC wrappers;
+  - added component `kind`, prop `defaultValue`, and deeper props extraction for `React.FC`, `FC`, generics, destructuring, and `forwardRef`.
 - Unused-component correctness:
   - `find_unused_components` now reports usage kinds, known non-JSX references, confidence, and clearer "no known usages" reasons;
   - JSX-only usage tools keep their existing `usageCount` and `usedIn` behavior.

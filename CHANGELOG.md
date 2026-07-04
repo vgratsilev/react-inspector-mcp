@@ -8,6 +8,8 @@
 - Added CI coverage for Node.js 20 and 22, packaged smoke testing, and `npm pack --dry-run`.
 - Added `limit`, `offset`, `mode`, and `fields` output controls for broad component tools.
 - Added non-JSX reference metadata, usage kinds, and confidence to `find_unused_components`.
+- Added component `kind` metadata, prop `defaultValue` metadata, and `componentWrappers` scan options.
+- Added scanner coverage for class components, anonymous default exports, styled factories, configured HOCs, and deeper props patterns.
 
 ### Changed
 

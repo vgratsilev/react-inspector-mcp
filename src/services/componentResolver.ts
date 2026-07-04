@@ -50,11 +50,18 @@ export function resolveAliasedSymbol(symbol: Symbol): Symbol {
 }
 
 function getComponentNameNode(node: ComponentNode): Node | undefined {
-    if (Node.isFunctionDeclaration(node)) {
+    if (
+        Node.isClassDeclaration(node) ||
+        Node.isFunctionDeclaration(node)
+    ) {
         return node.getNameNode();
     }
 
-    return node.getNameNode();
+    if (Node.isVariableDeclaration(node)) {
+        return node.getNameNode();
+    }
+
+    return undefined;
 }
 
 function getComponentSymbol(

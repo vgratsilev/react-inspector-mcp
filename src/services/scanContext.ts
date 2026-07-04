@@ -42,7 +42,7 @@ export function createScanContext(
             options
         )
     );
-    const components = scanComponentsInSourceFiles(sourceFiles);
+    const components = scanComponentsInSourceFiles(sourceFiles, options);
     const resolver = createComponentResolver(components);
     let usageIndex: UsageIndex | undefined;
     let referenceIndex: ComponentReferenceIndex | undefined;

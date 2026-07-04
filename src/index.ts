@@ -26,6 +26,7 @@ import {
 const scanOptionsSchema = z.object({
     include: z.array(z.string().trim().min(1)).optional(),
     exclude: z.array(z.string().trim().min(1)).optional(),
+    componentWrappers: z.array(z.string().trim().min(1)).optional(),
 });
 
 const outputOptionsSchema = z.object({
@@ -65,6 +66,12 @@ const scanOptionsInputSchema = {
         items: { type: "string" },
         description:
             "Optional glob patterns relative to project root, for example ['**/*.test.tsx']",
+    },
+    componentWrappers: {
+        type: "array",
+        items: { type: "string" },
+        description:
+            "Optional component wrapper callees, for example ['observer', 'mobx.observer', 'connect']",
     },
 };
 

@@ -56,11 +56,14 @@ All tools also accept optional scan filters:
 {
   "projectPath": "C:/absolute/path/to/react-project",
   "include": ["src/**/*.tsx"],
-  "exclude": ["**/*.test.tsx", "**/*.stories.tsx"]
+  "exclude": ["**/*.test.tsx", "**/*.stories.tsx"],
+  "componentWrappers": ["observer", "mobx.observer", "connect"]
 }
 ```
 
 `include` and `exclude` are glob-like patterns relative to `projectPath`.
+`componentWrappers` adds custom HOC/wrapper callees to the built-in React
+wrapper allowlist. Values are exact callee names.
 
 Default excludes:
 
@@ -82,6 +85,7 @@ They accept:
 Supported `fields` values:
 
 - `name`
+- `kind`
 - `path`
 - `declaration`
 - `props`
@@ -95,6 +99,8 @@ Supported `fields` values:
 and does not include full prop types. For `search_components`, summary mode
 includes `usageCount` by default but not `usedIn`.
 Request `usedIn` with `mode: "full"`.
+
+`kind` is one of `function`, `class`, `wrapped`, `lazy`, or `styled`.
 
 Use `mode: "full"` with an explicit larger `limit` when you need the old full
 component shape for many components.
@@ -120,6 +126,7 @@ component shape for many components.
 ```json
 {
   "name": "Button",
+  "kind": "function",
   "path": "C:/project/src/components/Button.tsx",
   "props": [
     {
@@ -138,6 +145,7 @@ component shape for many components.
 ```json
 {
   "name": "Button",
+  "kind": "function",
   "path": "C:/project/src/components/Button.tsx",
   "declaration": {
     "filePath": "C:/project/src/components/Button.tsx",
@@ -157,11 +165,15 @@ component shape for many components.
 }
 ```
 
+Full props include `defaultValue` only when the scanner can read a default from
+object destructuring, for example `{ tone = "info" }`.
+
 ### Component With Usages
 
 ```json
 {
   "name": "Button",
+  "kind": "function",
   "path": "C:/project/src/components/Button.tsx",
   "declaration": {
     "filePath": "C:/project/src/components/Button.tsx",
@@ -214,7 +226,8 @@ Input:
   "offset": 0,
   "mode": "summary",
   "include": ["src/**/*.tsx"],
-  "exclude": ["**/*.test.tsx"]
+  "exclude": ["**/*.test.tsx"],
+  "componentWrappers": ["observer"]
 }
 ```
 
@@ -447,11 +460,15 @@ Output:
 
 ## Detection Rules
 
-A component is currently detected when:
+A component is currently detected when it has an uppercase component name or an
+anonymous default export name derived from the file path, and it matches one of
+these patterns:
 
-- it is a function declaration or variable declaration;
-- its name starts with an uppercase letter;
-- its implementation contains JSX.
+- function declaration or variable function with JSX;
+- class declaration with JSX in `render()`;
+- built-in or configured wrapper call around a JSX function;
+- `lazy` or `React.lazy` declaration;
+- styled factory declaration.
 
 Supported declaration examples:
 
@@ -464,6 +481,20 @@ export function Button(props: ButtonProps) {
 ```tsx
 export const Button = (props: ButtonProps) => {
   return <button>{props.children}</button>;
+};
+```
+
+```tsx
+export class Panel extends React.Component<PanelProps> {
+  render() {
+    return <section>{this.props.title}</section>;
+  }
+}
+```
+
+```tsx
+export default ({ title = "Untitled" }: PanelProps) => {
+  return <section>{title}</section>;
 };
 ```
 
@@ -503,14 +534,28 @@ export const LazyNamedPanel = lazy(() =>
 );
 ```
 
-The scanner recognizes these component wrappers when JSX is inside the wrapped function:
+```tsx
+export const StyledPanel = styled.section`
+  display: block;
+`;
+```
+
+The scanner recognizes these component wrappers when JSX is inside the wrapped
+function:
 
 - `memo`
 - `React.memo`
 - `forwardRef`
 - `React.forwardRef`
 
-Wrappers can be nested, for example `memo(forwardRef(...))` and `React.memo(React.forwardRef(...))`. Arbitrary HOC calls such as `withSomething(...)` are not treated as components unless they are explicitly supported by this list. The scanner also recognizes `lazy` and `React.lazy` variable declarations as components.
+Wrappers can be nested, for example `memo(forwardRef(...))` and
+`React.memo(React.forwardRef(...))`. Add arbitrary HOC names through
+`componentWrappers`, for example `observer`, `mobx.observer`, `connect`, or
+`withFeatureFlag`.
+
+Props extraction supports typed props parameters, object destructuring defaults,
+class generic props, `React.FC<Props>`, `FC<Props>`, and
+`forwardRef<Ref, Props>`.
 
 ## Usage Rules
 
@@ -557,10 +602,12 @@ Covered cases:
 - re-export chains
 - same-name components in dependency graphs
 - lazy import dependency edges
-- `memo`, `React.memo`, `forwardRef`, `React.forwardRef`, and `lazy`
+- class components, anonymous default exports, and styled factories
+- `memo`, `React.memo`, `forwardRef`, `React.forwardRef`, `lazy`, and configured wrappers
+- `React.FC`, `FC`, generic props, destructuring defaults, and `forwardRef<Ref, Props>`
 - unused component risk
 - component dependencies and dependents
-- `include` and `exclude` scan filters
+- `include`, `exclude`, and `componentWrappers` scan filters/options
 - broad response pagination, `summary`/`full` modes, and field filtering
 
 Run:
@@ -571,7 +618,8 @@ npm test
 
 ## Known Limitations
 
-- Higher-order components outside the documented wrapper allowlist are not recognized.
+- Higher-order components are recognized only when their callee is built in or passed through `componentWrappers`.
+- Styled factories are detected syntactically; deep styled-components type metadata is not expanded.
 - Component lookup by `componentName` returns the first exact case-insensitive name match when multiple components share the same name.
 - Usage scanning excludes JSX usages inside the component's own declaration file.
 - Results depend on the target project's `tsconfig.json`.
