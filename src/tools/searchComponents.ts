@@ -1,14 +1,9 @@
-import { Node } from "ts-morph";
-
-import { scanComponents } from "../services/componentScanner.js";
-import { getComponentImplementationNode } from "../services/componentNodeUtils.js";
-import {
-    createComponentResolver,
-    getComponentKey,
-} from "../services/componentResolver.js";
-import type { ComponentResolver } from "../services/componentResolver.js";
-import { getLazyImportReference } from "../services/lazyImportUtils.js";
-import { scanUsages } from "../services/usageScanner.js";
+import { getComponentKey } from "../services/componentResolver.js";
+import type {
+    InternalComponentDependency,
+} from "../services/dependencyScanner.js";
+import { createScanContext } from "../services/scanContext.js";
+import { getComponentUsageFromIndex } from "../services/usageScanner.js";
 import {
     ComponentDependencies,
     ComponentDependents,
@@ -16,7 +11,6 @@ import {
     ComponentInfo,
     ComponentNotFound,
     ComponentUsage,
-    ComponentUsageLocation,
     FullComponentInfo,
     InternalComponentInfo,
     UnusedComponentInfo,
@@ -28,10 +22,6 @@ type PublicComponentInfo = ComponentInfo & Pick<
     FullComponentInfo,
     "description" | "exported" | "defaultExport"
 >;
-
-type InternalComponentDependency = ComponentDependency & {
-    componentKey: string;
-};
 
 function toPublicComponent(
     component: InternalComponentInfo
@@ -108,120 +98,6 @@ function componentNotFound(componentName: string): ComponentNotFound {
     };
 }
 
-function createUsageLocation(
-    usageNode: Node,
-    kind: ComponentUsageLocation["kind"]
-): ComponentUsageLocation {
-    const sourceFile = usageNode.getSourceFile();
-    const filePath = sourceFile.getFilePath();
-    const { line, column } = sourceFile.getLineAndColumnAtPos(
-        usageNode.getStart()
-    );
-
-    return {
-        filePath,
-        line,
-        column,
-        kind,
-        text: usageNode.getText(),
-    };
-}
-
-function getDependenciesInsideComponent(
-    component: InternalComponentInfo,
-    resolver: ComponentResolver
-): InternalComponentDependency[] {
-    const implementationNode = getComponentImplementationNode(component.node);
-    const componentKey = getComponentKey(component);
-    const dependenciesByKey = new Map<
-        string,
-        InternalComponentDependency
-    >();
-    const seen = new Set<string>();
-
-    function addDependencyUsage(
-        dependencyComponent: InternalComponentInfo,
-        usageNode: Node,
-        kind: ComponentUsageLocation["kind"]
-    ): void {
-        const dependencyKey = getComponentKey(dependencyComponent);
-
-        if (dependencyKey === componentKey) {
-            return;
-        }
-
-        const usage = createUsageLocation(usageNode, kind);
-        const key = [
-            dependencyKey,
-            usage.filePath,
-            usage.line,
-            usage.column,
-            usage.kind,
-        ].join(":");
-
-        if (seen.has(key)) {
-            return;
-        }
-
-        seen.add(key);
-
-        const dependency = dependenciesByKey.get(dependencyKey) ?? {
-            componentKey: dependencyKey,
-            name: dependencyComponent.name,
-            path: dependencyComponent.path,
-            usages: [],
-        };
-
-        dependency.usages.push(usage);
-        dependenciesByKey.set(dependencyKey, dependency);
-    }
-
-    for (const jsxUsage of implementationNode.getDescendants()) {
-        if (
-            !Node.isJsxOpeningElement(jsxUsage) &&
-            !Node.isJsxSelfClosingElement(jsxUsage)
-        ) {
-            continue;
-        }
-
-        const tagName = jsxUsage.getTagNameNode().getText();
-
-        if (!/^[A-Z]/.test(tagName)) {
-            continue;
-        }
-
-        const dependencyComponent = resolver.resolveJsxTag(
-            jsxUsage.getTagNameNode()
-        );
-
-        if (!dependencyComponent) {
-            continue;
-        }
-
-        addDependencyUsage(dependencyComponent, jsxUsage, "jsx");
-    }
-
-    const lazyImport = getLazyImportReference(component.node);
-
-    if (lazyImport) {
-        const dependencyComponent = resolver.resolveLazyImport(
-            component.node.getSourceFile(),
-            lazyImport.moduleSpecifier,
-            lazyImport.exportName
-        );
-
-        if (dependencyComponent) {
-            addDependencyUsage(
-                dependencyComponent,
-                lazyImport.lazyCall,
-                "lazy_import"
-            );
-        }
-    }
-
-    return [...dependenciesByKey.values()];
-}
-
 function toPublicDependency(
     dependency: InternalComponentDependency
 ): ComponentDependency {
@@ -232,54 +108,35 @@ function toPublicDependency(
     };
 }
 
-function buildDependencyMap(
-    components: InternalComponentInfo[]
-): Map<string, InternalComponentDependency[]> {
-    const dependenciesByComponent = new Map<
-        string,
-        InternalComponentDependency[]
-    >();
-    const resolver = createComponentResolver(components);
-
-    for (const component of components) {
-        dependenciesByComponent.set(
-            getComponentKey(component),
-            getDependenciesInsideComponent(component, resolver)
-        );
-    }
-
-    return dependenciesByComponent;
-}
-
 export async function searchComponents(
     projectPath: string,
     query: string,
     options: ScanOptions = {}
 ): Promise<FullComponentInfo[]> {
 
-    const components = await scanComponents(projectPath, options);
+    const context = createScanContext(projectPath, options);
+    const { components } = context;
     const matched = components.filter(component =>
         matchesQuery(component, query)
     );
-    const result: FullComponentInfo[] = [];
 
-    for (const component of matched) {
-        result.push({
-            ...toPublicComponent(component),
-            ...(await scanUsages(component, projectPath, options, {
-                components,
-            })),
-        });
+    if (matched.length === 0) {
+        return [];
     }
 
-    return result;
+    const usageIndex = context.getUsageIndex();
+
+    return matched.map(component => ({
+        ...toPublicComponent(component),
+        ...getComponentUsageFromIndex(component, usageIndex),
+    }));
 }
 
 export async function listComponents(
     projectPath: string,
     options: ScanOptions = {}
 ): Promise<PublicComponentInfo[]> {
-    const components = await scanComponents(projectPath, options);
+    const { components } = createScanContext(projectPath, options);
 
     return components.map(toPublicComponent);
 }
@@ -290,7 +147,8 @@ export async function getComponent(
     includeUsages = true,
     options: ScanOptions = {}
 ): Promise<FullComponentInfo | ComponentNotFound> {
-    const components = await scanComponents(projectPath, options);
+    const context = createScanContext(projectPath, options);
+    const { components } = context;
     const component = getComponentByName(components, componentName);
 
     if (!component) {
@@ -309,9 +167,10 @@ export async function getComponent(
 
     return {
         ...publicComponent,
-        ...(await scanUsages(component, projectPath, options, {
-            components,
-        })),
+        ...getComponentUsageFromIndex(
+            component,
+            context.getUsageIndex()
+        ),
     };
 }
 
@@ -320,27 +179,28 @@ export async function findComponentUsages(
     componentName: string,
     options: ScanOptions = {}
 ): Promise<ComponentUsage | ComponentNotFound> {
-    const components = await scanComponents(projectPath, options);
+    const context = createScanContext(projectPath, options);
+    const { components } = context;
     const component = getComponentByName(components, componentName);
 
     if (!component) {
         return componentNotFound(componentName);
     }
 
-    return scanUsages(component, projectPath, options, { components });
+    return getComponentUsageFromIndex(component, context.getUsageIndex());
 }
 
 export async function findUnusedComponents(
     projectPath: string,
     options: ScanOptions = {}
 ): Promise<UnusedComponentInfo[]> {
-    const components = await scanComponents(projectPath, options);
+    const context = createScanContext(projectPath, options);
+    const { components } = context;
+    const usageIndex = context.getUsageIndex();
     const result: UnusedComponentInfo[] = [];
 
     for (const component of components) {
-        const usage = await scanUsages(component, projectPath, options, {
-            components,
-        });
+        const usage = getComponentUsageFromIndex(component, usageIndex);
 
         if (usage.usageCount > 0) {
             continue;
@@ -362,7 +222,8 @@ export async function getComponentDependencies(
     componentName: string,
     options: ScanOptions = {}
 ): Promise<ComponentDependencies | ComponentNotFound> {
-    const components = await scanComponents(projectPath, options);
+    const context = createScanContext(projectPath, options);
+    const { components } = context;
     const component = getComponentByName(components, componentName);
 
     if (!component) {
@@ -372,7 +233,7 @@ export async function getComponentDependencies(
     return {
         componentName: component.name,
         dependencies: (
-            buildDependencyMap(components).get(getComponentKey(component)) ??
+            context.getDependencyMap().get(getComponentKey(component)) ??
             []
         ).map(toPublicDependency),
     };
@@ -383,14 +244,15 @@ export async function getComponentDependents(
     componentName: string,
     options: ScanOptions = {}
 ): Promise<ComponentDependents | ComponentNotFound> {
-    const components = await scanComponents(projectPath, options);
+    const context = createScanContext(projectPath, options);
+    const { components } = context;
     const component = getComponentByName(components, componentName);
 
     if (!component) {
         return componentNotFound(componentName);
     }
 
-    const dependencyMap = buildDependencyMap(components);
+    const dependencyMap = context.getDependencyMap();
     const componentKey = getComponentKey(component);
     const componentsByKey = new Map(
         components.map(candidate => [

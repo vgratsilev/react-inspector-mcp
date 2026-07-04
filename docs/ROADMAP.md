@@ -4,14 +4,13 @@ See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detaile
 
 ## Now
 
-Focus: performance groundwork after release safety.
+Focus: token-safe broad responses.
 
-- Add a shared `ScanContext` so public tools do not repeat full project scans.
+- Add output limits, pagination or cursors, `summary` mode, and field selection for broad responses.
 - Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
 
 ## Next
 
-- Add output limits, pagination or cursors, `summary` mode, and field selection for broad responses.
 - Make `find_unused_components` more explicit about usage kinds, confidence, and "no known usages" risk.
 
 ## Later
@@ -23,6 +22,10 @@ Focus: performance groundwork after release safety.
 
 ## Completed
 
+- Shared ScanContext:
+  - public tools now share one per-call scan context;
+  - wide `search_components` and `find_unused_components` avoid repeated full usage scans;
+  - dependency and dependent tools use the same per-call dependency map.
 - Release safety:
   - packaged clean-install MCP smoke test;
   - CI on Node.js 20 and 22;

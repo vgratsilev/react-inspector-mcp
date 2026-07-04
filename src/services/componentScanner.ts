@@ -1,4 +1,5 @@
 import { Node } from "ts-morph";
+import type { SourceFile } from "ts-morph";
 import path from "node:path";
 
 import { getProject } from "./projectManager.js";
@@ -13,25 +14,12 @@ import type { ScanOptions } from "../types/ScanOptions.js";
 import { shouldIncludeFile } from "./pathMatcher.js";
 import { getComponentPropsParameter } from "./componentNodeUtils.js";
 
-export async function scanComponents(
-    projectPath: string,
-    options: ScanOptions = {}
-): Promise<InternalComponentInfo[]> {
-
-    const normalizedProjectPath = path.resolve(projectPath);
-    const project = getProject(projectPath);
-
+export function scanComponentsInSourceFiles(
+    sourceFiles: SourceFile[]
+): InternalComponentInfo[] {
     const result: InternalComponentInfo[] = [];
 
-    for (const file of project.getSourceFiles()) {
-        if (!shouldIncludeFile(
-            normalizedProjectPath,
-            file.getFilePath(),
-            options
-        )) {
-            continue;
-        }
-
+    for (const file of sourceFiles) {
         const nodes = [
             ...file.getFunctions(),
             ...file.getVariableDeclarations(),
@@ -79,4 +67,22 @@ export async function scanComponents(
     }
 
     return result;
+}
+
+export async function scanComponents(
+    projectPath: string,
+    options: ScanOptions = {}
+): Promise<InternalComponentInfo[]> {
+
+    const normalizedProjectPath = path.resolve(projectPath);
+    const project = getProject(projectPath);
+    const sourceFiles = project.getSourceFiles().filter(file =>
+        shouldIncludeFile(
+            normalizedProjectPath,
+            file.getFilePath(),
+            options
+        )
+    );
+
+    return scanComponentsInSourceFiles(sourceFiles);
 }

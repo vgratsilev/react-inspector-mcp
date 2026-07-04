@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { SourceFile } from "ts-morph";
 
 import {
     findComponentUsages,
@@ -12,6 +13,7 @@ import {
     listComponents,
     searchComponents,
 } from "../src/tools/searchComponents.js";
+import { getProject } from "../src/services/projectManager.js";
 import { shouldIncludeFile } from "../src/services/pathMatcher.js";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -23,6 +25,14 @@ function normalizePath(value: string): string {
 
 function sortedNames(values: Array<{ name: string }>): string[] {
     return values.map(value => value.name).sort();
+}
+
+function countIncludedSourceFiles(): number {
+    const project = getProject(fixturePath);
+
+    return project.getSourceFiles().filter(sourceFile =>
+        shouldIncludeFile(fixturePath, sourceFile.getFilePath())
+    ).length;
 }
 
 test("lists detected React components with props and metadata", async () => {
@@ -158,6 +168,22 @@ test("searches components by JSDoc description", async () => {
     );
 });
 
+test("wide search scans JSX usages once per included source file", async (t) => {
+    const expectedScanCount = countIncludedSourceFiles();
+    const originalGetDescendants = SourceFile.prototype.getDescendants;
+    const getDescendants = t.mock.method(
+        SourceFile.prototype,
+        "getDescendants",
+        function getDescendants(this: SourceFile) {
+            return originalGetDescendants.call(this);
+        }
+    );
+
+    await searchComponents(fixturePath, "");
+
+    assert.equal(getDescendants.mock.callCount(), expectedScanCount);
+});
+
 test("finds only JSX usages outside the declaration file", async () => {
     const usage = await findComponentUsages(fixturePath, "Button");
 
@@ -234,6 +260,22 @@ test("finds components without external JSX usages", async () => {
     assert.equal(unused?.risk, "medium");
     assert.equal(defaultPanel?.risk, "low");
     assert.equal(layoutWatermark?.risk, "high");
+});
+
+test("unused component lookup scans JSX usages once per included source file", async (t) => {
+    const expectedScanCount = countIncludedSourceFiles();
+    const originalGetDescendants = SourceFile.prototype.getDescendants;
+    const getDescendants = t.mock.method(
+        SourceFile.prototype,
+        "getDescendants",
+        function getDescendants(this: SourceFile) {
+            return originalGetDescendants.call(this);
+        }
+    );
+
+    await findUnusedComponents(fixturePath);
+
+    assert.equal(getDescendants.mock.callCount(), expectedScanCount);
 });
 
 test("returns component dependencies", async () => {

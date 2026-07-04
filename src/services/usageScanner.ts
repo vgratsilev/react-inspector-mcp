@@ -1,4 +1,5 @@
 import { Node } from "ts-morph";
+import type { SourceFile } from "ts-morph";
 import path from "node:path";
 
 import {
@@ -7,8 +8,15 @@ import {
     InternalComponentInfo,
 } from "../types/ComponentInfo.js";
 import type { ScanOptions } from "../types/ScanOptions.js";
-import { createComponentResolver } from "./componentResolver.js";
+import {
+    createComponentResolver,
+    getComponentKey,
+} from "./componentResolver.js";
+import type { ComponentResolver } from "./componentResolver.js";
+import { getProject } from "./projectManager.js";
 import { shouldIncludeFile } from "./pathMatcher.js";
+
+export type UsageIndex = Map<string, ComponentUsageLocation[]>;
 
 function addUsage(
     usages: ComponentUsageLocation[],
@@ -20,7 +28,7 @@ function addUsage(
     const { line, column } = sourceFile.getLineAndColumnAtPos(
         jsxUsage.getStart()
     );
-    const key = `${filePath}:${line}:${column}`;
+    const key = `${filePath}:${line}:${column}:jsx`;
 
     if (seen.has(key)) {
         return;
@@ -37,37 +45,43 @@ function addUsage(
     });
 }
 
-export async function scanUsages(
+export function getComponentUsageFromIndex(
     component: InternalComponentInfo,
-    projectPath: string,
-    options: ScanOptions = {},
-    usageOptions: {
+    usageIndex: UsageIndex
+): ComponentUsage {
+    const usedIn = usageIndex.get(getComponentKey(component)) ?? [];
+
+    return {
+        usageCount: usedIn.length,
+        usedIn,
+    };
+}
+
+export function buildUsageIndex(
+    sourceFiles: SourceFile[],
+    components: InternalComponentInfo[],
+    resolver: ComponentResolver,
+    options: {
         includeDeclarationFile?: boolean;
-        components?: InternalComponentInfo[];
     } = {}
-): Promise<ComponentUsage> {
-    const normalizedProjectPath = path.resolve(projectPath);
-    const componentFile = component.node
-        .getSourceFile()
-        .getFilePath();
-    const includeDeclarationFile =
-        usageOptions.includeDeclarationFile ?? false;
-    const resolver = createComponentResolver(
-        usageOptions.components ?? [component]
+): UsageIndex {
+    const usageIndex: UsageIndex = new Map(
+        components.map(component => [getComponentKey(component), []])
     );
-    const usages: ComponentUsageLocation[] = [];
-    const seen = new Set<string>();
+    const seenByComponentKey = new Map<string, Set<string>>();
+    const includeDeclarationFile =
+        options.includeDeclarationFile ?? false;
 
-    for (const sourceFile of component.node.getProject().getSourceFiles()) {
+    function getSeen(componentKey: string): Set<string> {
+        const seen = seenByComponentKey.get(componentKey) ?? new Set();
+
+        seenByComponentKey.set(componentKey, seen);
+
+        return seen;
+    }
+
+    for (const sourceFile of sourceFiles) {
         const filePath = sourceFile.getFilePath();
-
-        if (!includeDeclarationFile && filePath === componentFile) {
-            continue;
-        }
-
-        if (!shouldIncludeFile(normalizedProjectPath, filePath, options)) {
-            continue;
-        }
 
         for (const jsxUsage of sourceFile.getDescendants()) {
             if (
@@ -84,16 +98,55 @@ export async function scanUsages(
                 continue;
             }
 
-            if (resolver.resolveJsxTag(tagNameNode) !== component) {
+            const component = resolver.resolveJsxTag(tagNameNode);
+
+            if (!component) {
                 continue;
             }
 
-            addUsage(usages, seen, jsxUsage);
+            if (!includeDeclarationFile && filePath === component.path) {
+                continue;
+            }
+
+            const componentKey = getComponentKey(component);
+            const usages = usageIndex.get(componentKey);
+
+            if (!usages) {
+                continue;
+            }
+
+            addUsage(usages, getSeen(componentKey), jsxUsage);
         }
     }
 
-    return {
-        usageCount: usages.length,
-        usedIn: usages,
-    };
+    return usageIndex;
+}
+
+export async function scanUsages(
+    component: InternalComponentInfo,
+    projectPath: string,
+    options: ScanOptions = {},
+    usageOptions: {
+        includeDeclarationFile?: boolean;
+        components?: InternalComponentInfo[];
+    } = {}
+): Promise<ComponentUsage> {
+    const normalizedProjectPath = path.resolve(projectPath);
+    const project = getProject(projectPath);
+    const sourceFiles = project.getSourceFiles().filter(sourceFile =>
+        shouldIncludeFile(
+            normalizedProjectPath,
+            sourceFile.getFilePath(),
+            options
+        )
+    );
+    const components = usageOptions.components ?? [component];
+    const resolver = createComponentResolver(
+        components
+    );
+    const usageIndex = buildUsageIndex(sourceFiles, components, resolver, {
+        includeDeclarationFile: usageOptions.includeDeclarationFile,
+    });
+
+    return getComponentUsageFromIndex(component, usageIndex);
 }
