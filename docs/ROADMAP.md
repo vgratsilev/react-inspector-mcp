@@ -4,21 +4,25 @@ See [README](../README.md) for setup, [tool reference](REFERENCE.md) for detaile
 
 ## Now
 
-Focus: cache lifecycle.
+Focus: agent-facing tools.
 
-- Improve cache lifecycle for long-running MCP sessions, including refresh behavior and bounded project caching.
+- Add compact component report and dependency graph tools for agent workflows.
 - Keep release checks reproducible with `npm test`, `npm run build`, `npm run test:smoke`, `npm pack --dry-run`, and `git status`.
 
 ## Next
 
-- Add agent-facing tools for compact component reports and dependency graph navigation.
+- Run a release pass after functional changes.
 
 ## Later
 
-- Run a full release pass after functional changes, including package metadata, docs, changelog, package dry-run, and git status.
+- Revisit larger scanner correctness gaps discovered from real projects.
 
 ## Completed
 
+- Cache lifecycle:
+  - added `refresh_project_cache`;
+  - refreshed added and deleted source files across long-running sessions;
+  - bounded project cache growth with idle TTL and LRU eviction.
 - Scanner coverage:
   - added class components, anonymous default exports, styled factories, and configured HOC wrappers;
   - added component `kind`, prop `defaultValue`, and deeper props extraction for `React.FC`, `FC`, generics, destructuring, and `forwardRef`.

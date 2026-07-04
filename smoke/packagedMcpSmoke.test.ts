@@ -321,6 +321,7 @@ test(
             const toolNames = tools.tools.map(tool => tool.name);
 
             assert.ok(toolNames.includes("list_components"));
+            assert.ok(toolNames.includes("refresh_project_cache"));
 
             const listComponentsResult = await client.callTool(
                 {
@@ -363,6 +364,26 @@ test(
                 ),
                 "Button title prop was not detected"
             );
+
+            const refreshResult = await client.callTool(
+                {
+                    name: "refresh_project_cache",
+                    arguments: {
+                        projectPath: targetProjectDir,
+                    },
+                },
+                undefined,
+                { timeout: mcpTimeoutMs }
+            );
+            const refreshPayload: unknown = JSON.parse(
+                getToolText(refreshResult)
+            );
+
+            assert.ok(isRecord(refreshPayload));
+            assert.equal(refreshPayload.projectPath, targetProjectDir);
+            assert.equal(refreshPayload.refreshed, true);
+            assert.equal(refreshPayload.cacheSize, 1);
+            assert.equal(refreshPayload.sourceFileCount, 3);
         } catch (error) {
             assert.fail(
                 [

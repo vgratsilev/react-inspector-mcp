@@ -10,12 +10,14 @@
 - Added non-JSX reference metadata, usage kinds, and confidence to `find_unused_components`.
 - Added component `kind` metadata, prop `defaultValue` metadata, and `componentWrappers` scan options.
 - Added scanner coverage for class components, anonymous default exports, styled factories, configured HOCs, and deeper props patterns.
+- Added `refresh_project_cache` for explicit project cache refresh in long-running MCP sessions.
 
 ### Changed
 
 - Refactored component tools to share a per-call scan context, avoiding repeated full usage scans without changing MCP response shapes.
 - Changed `list_components` and `search_components` to return paginated envelopes with a default `summary` mode and `limit` of 20.
 - Changed `find_unused_components` wording from absolute unused detection toward "no known external usages" candidates.
+- Changed project caching to refresh added/deleted source files on subsequent calls and evict idle or least-recently-used projects.
 
 ## v1.0.1
 

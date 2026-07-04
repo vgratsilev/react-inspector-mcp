@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { dirname, resolve } from "node:path";
+import { cp, mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { SourceFile } from "ts-morph";
 
 import {
@@ -13,7 +15,12 @@ import {
     listComponents,
     searchComponents,
 } from "../src/tools/searchComponents.js";
-import { getProject } from "../src/services/projectManager.js";
+import {
+    clearProjectCache,
+    getProject,
+    getProjectCacheStats,
+    refreshProjectCache,
+} from "../src/services/projectManager.js";
 import { shouldIncludeFile } from "../src/services/pathMatcher.js";
 import type { PropInfo } from "../src/types/ComponentInfo.js";
 
@@ -43,6 +50,75 @@ async function listAllComponents() {
             mode: "full",
         })
     ).items;
+}
+
+async function createFixtureCopy(
+    t: TestContext,
+    prefix: string
+): Promise<string> {
+    const workDir = await mkdtemp(join(tmpdir(), prefix));
+    const projectPath = join(workDir, "react-project");
+
+    clearProjectCache();
+    await cp(fixturePath, projectPath, { recursive: true });
+    t.after(async () => {
+        clearProjectCache();
+        await rm(workDir, { recursive: true, force: true });
+    });
+
+    return projectPath;
+}
+
+async function writeMinimalReactProject(
+    projectPath: string,
+    componentName: string
+): Promise<void> {
+    const srcDir = join(projectPath, "src");
+
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(
+        join(projectPath, "tsconfig.json"),
+        `${JSON.stringify(
+            {
+                compilerOptions: {
+                    jsx: "preserve",
+                    target: "ES2023",
+                    module: "NodeNext",
+                    moduleResolution: "NodeNext",
+                    strict: true,
+                    skipLibCheck: true,
+                },
+                include: ["src"],
+            },
+            null,
+            2
+        )}\n`,
+        "utf8"
+    );
+    await writeFile(
+        join(srcDir, "global.d.ts"),
+        [
+            "declare namespace JSX {",
+            "  interface Element {}",
+            "  interface IntrinsicElements {",
+            "    div: Record<string, unknown>;",
+            "    section: Record<string, unknown>;",
+            "  }",
+            "}",
+            "",
+        ].join("\n"),
+        "utf8"
+    );
+    await writeFile(
+        join(srcDir, `${componentName}.tsx`),
+        [
+            `export function ${componentName}() {`,
+            "  return <div />;",
+            "}",
+            "",
+        ].join("\n"),
+        "utf8"
+    );
 }
 
 test("limits list_components by default", async () => {
@@ -890,4 +966,160 @@ test("matches default exclude paths", () => {
             false
         );
     }
+});
+
+test("project cache includes files added during a session", async (t) => {
+    const projectPath = await createFixtureCopy(
+        t,
+        "react-inspector-cache-added-"
+    );
+    const firstResult = await listComponents(projectPath, {
+        limit: 200,
+        mode: "full",
+    });
+
+    assert.ok(
+        !firstResult.items.some(component =>
+            component.name === "LifecycleAdded"
+        )
+    );
+
+    await writeFile(
+        join(projectPath, "src/components/LifecycleAdded.tsx"),
+        [
+            "export function LifecycleAdded() {",
+            "  return <section />;",
+            "}",
+            "",
+        ].join("\n"),
+        "utf8"
+    );
+
+    const secondResult = await listComponents(projectPath, {
+        limit: 200,
+        mode: "full",
+    });
+
+    assert.ok(
+        secondResult.items.some(component =>
+            component.name === "LifecycleAdded"
+        )
+    );
+});
+
+test("project cache drops files deleted during a session", async (t) => {
+    const projectPath = await createFixtureCopy(
+        t,
+        "react-inspector-cache-deleted-"
+    );
+    const firstResult = await listComponents(projectPath, {
+        limit: 200,
+        mode: "full",
+    });
+
+    assert.ok(firstResult.items.some(component => component.name === "Button"));
+
+    await unlink(join(projectPath, "src/components/Button.tsx"));
+
+    const secondResult = await listComponents(projectPath, {
+        limit: 200,
+        mode: "full",
+    });
+
+    assert.ok(
+        !secondResult.items.some(component => component.name === "Button")
+    );
+});
+
+test("project cache applies changed include and exclude scan filters", async (t) => {
+    const projectPath = await createFixtureCopy(
+        t,
+        "react-inspector-cache-filters-"
+    );
+    const componentsOnly = await listComponents(projectPath, {
+        include: ["src/components/*.tsx"],
+        exclude: ["**/Unused.tsx"],
+        limit: 200,
+        mode: "full",
+    });
+    const pagesOnly = await listComponents(projectPath, {
+        include: ["src/pages/*.tsx"],
+        limit: 200,
+        mode: "full",
+    });
+    const componentNames = componentsOnly.items.map(component =>
+        component.name
+    );
+    const pageNames = pagesOnly.items.map(component => component.name);
+
+    assert.ok(componentNames.includes("Button"));
+    assert.ok(!componentNames.includes("Unused"));
+    assert.ok(!componentNames.includes("Home"));
+    assert.ok(pageNames.includes("Home"));
+    assert.ok(!pageNames.includes("Button"));
+});
+
+test("project cache is bounded by the maximum entry count", async (t) => {
+    const workDir = await mkdtemp(
+        join(tmpdir(), "react-inspector-cache-limit-")
+    );
+
+    clearProjectCache();
+    t.after(async () => {
+        clearProjectCache();
+        await rm(workDir, { recursive: true, force: true });
+    });
+
+    for (let index = 0; index < 6; index++) {
+        const componentName = `CacheLimit${index}`;
+        const projectPath = join(workDir, `project-${index}`);
+
+        await writeMinimalReactProject(projectPath, componentName);
+        await listComponents(projectPath, {
+            limit: 10,
+            mode: "full",
+        });
+    }
+
+    const stats = getProjectCacheStats();
+
+    assert.equal(stats.maxSize, 5);
+    assert.equal(stats.size, 5);
+});
+
+test("refreshProjectCache returns a project refresh summary", async (t) => {
+    const projectPath = await createFixtureCopy(
+        t,
+        "react-inspector-cache-refresh-"
+    );
+
+    await listComponents(projectPath, {
+        limit: 200,
+        mode: "full",
+    });
+    await writeFile(
+        join(projectPath, "src/components/ExplicitRefresh.tsx"),
+        [
+            "export function ExplicitRefresh() {",
+            "  return <section />;",
+            "}",
+            "",
+        ].join("\n"),
+        "utf8"
+    );
+
+    const summary = refreshProjectCache(projectPath);
+    const result = await listComponents(projectPath, {
+        limit: 200,
+        mode: "full",
+    });
+
+    assert.equal(summary.projectPath, resolve(projectPath));
+    assert.equal(summary.tsconfigPath, resolve(projectPath, "tsconfig.json"));
+    assert.equal(summary.cacheSize, 1);
+    assert.equal(summary.refreshed, true);
+    assert.ok(summary.sourceFileCount > 0);
+    assert.ok(
+        result.items.some(component => component.name === "ExplicitRefresh")
+    );
 });

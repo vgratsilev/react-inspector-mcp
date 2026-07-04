@@ -17,6 +17,7 @@ import {
     listComponents,
     searchComponents,
 } from "./tools/searchComponents.js";
+import { refreshProjectCache } from "./services/projectManager.js";
 import {
     componentOutputFields,
     componentOutputModes,
@@ -276,6 +277,16 @@ server.setRequestHandler(
                     required: ["projectPath", "componentName"],
                 },
             },
+            {
+                name: "refresh_project_cache",
+                description:
+                    "Refresh cached project source files for a long-running MCP session",
+                inputSchema: {
+                    type: "object",
+                    properties: projectPathInputSchema,
+                    required: ["projectPath"],
+                },
+            },
         ],
     })
 );
@@ -343,6 +354,10 @@ server.setRequestHandler(
                     parsedArgs.componentName,
                     parsedArgs
                 );
+            } else if (name === "refresh_project_cache") {
+                const parsedArgs = projectPathSchema.parse(args);
+
+                result = refreshProjectCache(parsedArgs.projectPath);
             } else {
                 throw new Error(`Unknown tool: ${name}`);
             }

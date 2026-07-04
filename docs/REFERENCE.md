@@ -72,6 +72,22 @@ Default excludes:
 - `**/.next/**`
 - `**/storybook-static/**`
 
+## Cache Lifecycle
+
+The server keeps a bounded `ts-morph` project cache for long-running MCP
+sessions.
+
+- Cache key: `projectPath` plus `<projectPath>/tsconfig.json`.
+- `include`, `exclude`, and `componentWrappers` are per-call scan options and
+  do not create separate cached projects.
+- Each tool call refreshes cached source files and reloads files from
+  `tsconfig.json`, so added and deleted files are reflected on the next call.
+- Idle project entries are evicted after 30 seconds.
+- The cache keeps at most 5 project entries and evicts least-recently-used
+  entries when the limit is exceeded.
+- Use `refresh_project_cache` when a client wants an explicit refresh before a
+  follow-up tool call.
+
 ## Broad Output Options
 
 `list_components` and `search_components` return paginated broad responses.
@@ -458,6 +474,33 @@ Output:
 }
 ```
 
+### `refresh_project_cache`
+
+Refreshes the cached project for a long-running MCP session.
+
+Input:
+
+```json
+{
+  "projectPath": "C:/absolute/path/to/react-project"
+}
+```
+
+Output:
+
+```json
+{
+  "projectPath": "C:/absolute/path/to/react-project",
+  "tsconfigPath": "C:/absolute/path/to/react-project/tsconfig.json",
+  "sourceFileCount": 24,
+  "cacheSize": 1,
+  "refreshed": true
+}
+```
+
+This tool does not change scan filters. `include`, `exclude`, and
+`componentWrappers` remain options of the subsequent scan tool call.
+
 ## Detection Rules
 
 A component is currently detected when it has an uppercase component name or an
@@ -609,6 +652,7 @@ Covered cases:
 - component dependencies and dependents
 - `include`, `exclude`, and `componentWrappers` scan filters/options
 - broad response pagination, `summary`/`full` modes, and field filtering
+- cache refresh for added/deleted files and bounded project cache growth
 
 Run:
 
@@ -623,6 +667,7 @@ npm test
 - Component lookup by `componentName` returns the first exact case-insensitive name match when multiple components share the same name.
 - Usage scanning excludes JSX usages inside the component's own declaration file.
 - Results depend on the target project's `tsconfig.json`.
+- The cache always uses `<projectPath>/tsconfig.json`; custom tsconfig paths are not supported.
 
 ## Related
 
