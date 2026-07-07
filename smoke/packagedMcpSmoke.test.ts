@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+    mkdir,
+    mkdtemp,
+    readFile,
+    readdir,
+    rm,
+    writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -29,6 +36,18 @@ const binName =
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
+}
+
+async function readPackageVersion(): Promise<string> {
+    const packageJson: unknown = JSON.parse(
+        await readFile(join(repoRoot, "package.json"), "utf8")
+    );
+
+    if (!isRecord(packageJson) || typeof packageJson.version !== "string") {
+        assert.fail("Expected package.json to include a string version");
+    }
+
+    return packageJson.version;
 }
 
 function propertyToString(
@@ -309,10 +328,11 @@ test(
 
             await client.connect(transport, { timeout: mcpTimeoutMs });
 
-            assert.equal(
-                client.getServerVersion()?.name,
-                "react-inspector-mcp"
-            );
+            const expectedServerVersion = await readPackageVersion();
+            const serverVersion = client.getServerVersion();
+
+            assert.equal(serverVersion?.name, "react-inspector-mcp");
+            assert.equal(serverVersion?.version, expectedServerVersion);
             assert.ok(client.getServerCapabilities()?.tools);
 
             const tools = await client.listTools(undefined, {

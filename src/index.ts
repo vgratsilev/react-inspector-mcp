@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
@@ -31,6 +35,10 @@ import {
     componentOutputModes,
     DEFAULT_OUTPUT_LIMIT,
 } from "./types/ComponentOutput.js";
+
+const packageMetadataSchema = z.object({
+    version: z.string().trim().min(1),
+});
 
 const scanOptionsSchema = z.object({
     include: z.array(z.string().trim().min(1)).optional(),
@@ -191,10 +199,24 @@ function formatError(error: unknown): string {
     );
 }
 
+async function readPackageVersion(): Promise<string> {
+    const packageJsonPath = join(
+        dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "package.json"
+    );
+    const packageJsonText = await readFile(packageJsonPath, "utf8");
+    const packageJson: unknown = JSON.parse(packageJsonText);
+
+    return packageMetadataSchema.parse(packageJson).version;
+}
+
+const packageVersion = await readPackageVersion();
+
 const server = new Server(
     {
         name: "react-inspector-mcp",
-        version: "1.0.1",
+        version: packageVersion,
     },
     {
         capabilities: {
