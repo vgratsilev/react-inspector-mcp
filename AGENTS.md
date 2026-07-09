@@ -34,5 +34,6 @@ npm run build
 
 - Check `package.json`: `author`, `license`, `private`, and `repository`.
 - Run `npm test`, `npm run build`, and `npm pack --dry-run`.
+- Check whether `docs/ROADMAP.md` needs updates for completed or changed release work.
 - Check `git status`.
 - Do not publish the package until the npm/public release decision is explicit.

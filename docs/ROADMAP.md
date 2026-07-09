@@ -4,8 +4,9 @@ See [README](../README.md) for setup and [tool reference](REFERENCE.md) for deta
 
 ## Now
 
-- Verify the published `v1.1.0` package through npm/npx startup.
+- Verify the published `v1.1.2` package through npm/npx startup.
 - Collect release feedback and issue reports.
+- Watch for real-project feedback on bounded usage outputs and unused-candidate pagination.
 
 ## Next
 
@@ -17,6 +18,17 @@ See [README](../README.md) for setup and [tool reference](REFERENCE.md) for deta
 
 ## Completed
 
+- Published `v1.1.2`:
+  - pushed release commit `daa4edf` and tag `v1.1.2`;
+  - published `react-inspector-mcp@1.1.2` to npm with the `latest` dist-tag;
+  - created the GitHub Release for `v1.1.2`.
+- Token-safe focused tool responses:
+  - added `locationLimit` to `get_component` and `find_component_usages`;
+  - changed `find_unused_components` to return paginated envelopes;
+  - bounded unused-candidate reference locations by default.
+- Release docs:
+  - updated `docs/REFERENCE.md` for bounded usage responses and unused pagination;
+  - added a release-checklist reminder to verify whether `docs/ROADMAP.md` needs updates.
 - Published `v1.1.0`:
   - pushed release commit `0fffae4` and tag `v1.1.0`;
   - published `react-inspector-mcp@1.1.0` to npm with the `latest` dist-tag;
