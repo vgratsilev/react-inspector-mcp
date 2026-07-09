@@ -4,6 +4,14 @@
 
 No unreleased changes.
 
+## v1.1.2 - 2026-07-09
+
+### Changed
+
+- Added `locationLimit` to `get_component` and `find_component_usages` so usage location lists are bounded by default.
+- Changed `find_unused_components` to return paginated results with bounded reference locations.
+- Updated tool reference docs for bounded usage responses, unused pagination, and token-heavy limitations.
+
 ## v1.1.0 - 2026-07-05
 
 ### Added
