@@ -22,6 +22,7 @@ import {
     ComponentReportRisk,
     ComponentReferenceKind,
     ComponentReferenceLocation,
+    ComponentReferenceSummaryLocation,
     ComponentUsage,
     ComponentUsageLocation,
     DEFAULT_DEPENDENCY_GRAPH_MAX_NODES,
@@ -33,6 +34,7 @@ import {
     DependencyGraphOptions,
     FullComponentInfo,
     InternalComponentInfo,
+    LimitedComponentUsage,
     MAX_DEPENDENCY_GRAPH_DEPTH,
     PropInfo,
     SourceLocation,
@@ -100,6 +102,25 @@ type BroadFieldOptions = BroadToolOptions & {
 type ComponentReportToolOptions = ScanOptions & ComponentReportOptions;
 
 type DependencyGraphToolOptions = ScanOptions & DependencyGraphOptions;
+
+type LocationLimitOptions = {
+    locationLimit?: number;
+};
+
+type SourceTextOptions = {
+    includeSourceText?: boolean;
+};
+
+type ComponentUsageToolOptions = ScanOptions & LocationLimitOptions;
+
+type LimitedFullComponentInfo = FullComponentInfo &
+    Pick<LimitedComponentUsage, "returned" | "truncated" | "locationLimit">;
+
+type UnusedComponentsToolOptions =
+    ScanOptions &
+    Pick<ComponentOutputOptions, "limit" | "offset"> &
+    LocationLimitOptions &
+    SourceTextOptions;
 
 type ComponentUsageOwner = {
     name: string;
@@ -392,7 +413,7 @@ function toLimitedReportLocations(
         .map(location => toReportLocation(location, includeSourceText));
 }
 
-function getReportLocationLimit(options: ComponentReportOptions): number {
+function getLocationLimit(options: LocationLimitOptions): number {
     return getBoundedInteger(
         options.locationLimit,
         DEFAULT_REPORT_LOCATION_LIMIT,
@@ -451,6 +472,54 @@ function toReportDependency(
             includeSourceText
         ),
     };
+}
+
+function toLimitedUsage(
+    usage: ComponentUsage,
+    limit: number
+): LimitedComponentUsage {
+    const usedIn = usage.usedIn.slice(0, limit);
+
+    return {
+        usageCount: usage.usageCount,
+        usedIn,
+        returned: usedIn.length,
+        truncated: usedIn.length < usage.usedIn.length,
+        locationLimit: limit,
+    };
+}
+
+function toReferenceSummaryLocation(
+    reference: ComponentReferenceLocation,
+    includeSourceText: boolean
+): ComponentReferenceSummaryLocation {
+    const baseLocation = {
+        filePath: reference.filePath,
+        line: reference.line,
+        column: reference.column,
+        kind: reference.kind,
+    };
+
+    if (!includeSourceText) {
+        return baseLocation;
+    }
+
+    return {
+        ...baseLocation,
+        text: reference.text,
+    };
+}
+
+function toLimitedReferenceSummaryLocations(
+    references: ComponentReferenceLocation[],
+    limit: number,
+    includeSourceText: boolean
+): ComponentReferenceSummaryLocation[] {
+    return references
+        .slice(0, limit)
+        .map(reference =>
+            toReferenceSummaryLocation(reference, includeSourceText)
+        );
 }
 
 function getComponentsByKey(
@@ -763,8 +832,8 @@ export async function getComponent(
     projectPath: string,
     componentName: string,
     includeUsages = true,
-    options: ScanOptions = {}
-): Promise<FullComponentInfo | ComponentNotFound> {
+    options: ComponentUsageToolOptions = {}
+): Promise<LimitedFullComponentInfo | ComponentNotFound> {
     const context = createScanContext(projectPath, options);
     const { components } = context;
     const component = getComponentByName(components, componentName);
@@ -778,16 +847,24 @@ export async function getComponent(
     if (!includeUsages) {
         return {
             ...publicComponent,
-            usageCount: 0,
-            usedIn: [],
+            ...toLimitedUsage(
+                {
+                    usageCount: 0,
+                    usedIn: [],
+                },
+                getLocationLimit(options)
+            ),
         };
     }
 
     return {
         ...publicComponent,
-        ...getComponentUsageFromIndex(
-            component,
-            context.getUsageIndex()
+        ...toLimitedUsage(
+            getComponentUsageFromIndex(
+                component,
+                context.getUsageIndex()
+            ),
+            getLocationLimit(options)
         ),
     };
 }
@@ -795,8 +872,8 @@ export async function getComponent(
 export async function findComponentUsages(
     projectPath: string,
     componentName: string,
-    options: ScanOptions = {}
-): Promise<ComponentUsage | ComponentNotFound> {
+    options: ComponentUsageToolOptions = {}
+): Promise<LimitedComponentUsage | ComponentNotFound> {
     const context = createScanContext(projectPath, options);
     const { components } = context;
     const component = getComponentByName(components, componentName);
@@ -805,19 +882,24 @@ export async function findComponentUsages(
         return componentNotFound(componentName);
     }
 
-    return getComponentUsageFromIndex(component, context.getUsageIndex());
+    return toLimitedUsage(
+        getComponentUsageFromIndex(component, context.getUsageIndex()),
+        getLocationLimit(options)
+    );
 }
 
 export async function findUnusedComponents(
     projectPath: string,
-    options: ScanOptions = {}
-): Promise<UnusedComponentInfo[]> {
+    options: UnusedComponentsToolOptions = {}
+): Promise<PaginatedResult<UnusedComponentInfo>> {
     const context = createScanContext(projectPath, options);
     const { components } = context;
     const usageIndex = context.getUsageIndex();
     const referenceIndex = context.getReferenceIndex();
     const dependencyMap = context.getDependencyMap();
     const result: UnusedComponentInfo[] = [];
+    const locationLimit = getLocationLimit(options);
+    const includeSourceText = options.includeSourceText ?? false;
 
     for (const component of components) {
         const usage = getComponentUsageFromIndex(component, usageIndex);
@@ -831,19 +913,26 @@ export async function findUnusedComponents(
             ...getLazyImportReferences(component, dependencyMap),
         ];
         const confidence = getUnusedConfidence(component, references);
+        const limitedReferences = toLimitedReferenceSummaryLocations(
+            references,
+            locationLimit,
+            includeSourceText
+        );
 
         result.push({
             ...toPublicComponent(component),
             ...usage,
             reason: getUnusedReason(references),
             usageKinds: getUsageKinds(references),
-            references,
+            referenceCount: references.length,
+            returnedReferences: limitedReferences.length,
+            references: limitedReferences,
             confidence,
             risk: confidence,
         });
     }
 
-    return result;
+    return paginate(result, options, component => component);
 }
 
 export async function getComponentReport(
@@ -859,7 +948,7 @@ export async function getComponentReport(
         return componentNotFound(componentName);
     }
 
-    const limit = getReportLocationLimit(options);
+    const limit = getLocationLimit(options);
     const includeSourceText = options.includeSourceText ?? false;
     const usage = getComponentUsageFromIndex(
         component,

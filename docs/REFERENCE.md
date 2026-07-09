@@ -126,7 +126,7 @@ component shape for many components.
 
 ## Response Shapes
 
-### Paginated Broad Response
+### Paginated Response
 
 ```json
 {
@@ -139,6 +139,8 @@ component shape for many components.
 ```
 
 `nextOffset` is `null` when there are no more results.
+This shape is used by broad component tools and by
+`find_unused_components`.
 
 ### Summary Component
 
@@ -187,7 +189,10 @@ component shape for many components.
 Full props include `defaultValue` only when the scanner can read a default from
 object destructuring, for example `{ tone = "info" }`.
 
-### Component With Usages
+### Component With Bounded Usages
+
+`get_component` and `find_component_usages` limit returned usage locations with
+`locationLimit`. `usageCount` is always the total count.
 
 ```json
 {
@@ -203,7 +208,10 @@ object destructuring, for example `{ tone = "info" }`.
   "description": "Primary button component",
   "exported": true,
   "defaultExport": false,
-  "usageCount": 1,
+  "usageCount": 42,
+  "returned": 20,
+  "truncated": true,
+  "locationLimit": 20,
   "usedIn": [
     {
       "filePath": "C:/project/src/pages/Home.tsx",
@@ -217,6 +225,7 @@ object destructuring, for example `{ tone = "info" }`.
 ```
 
 `usageCount` counts JSX usages outside the component declaration file.
+`truncated` is `true` when more locations exist than were returned.
 
 Dependency and dependent usage locations can also use `kind: "lazy_import"`
 when the edge comes from `lazy(() => import(...))` or `React.lazy`.
@@ -283,12 +292,14 @@ Input:
 {
   "projectPath": "C:/absolute/path/to/react-project",
   "componentName": "Button",
-  "includeUsages": true
+  "includeUsages": true,
+  "locationLimit": 20
 }
 ```
 
 - `componentName` is case-insensitive but must otherwise match the component name.
 - `includeUsages` defaults to `true`.
+- `locationLimit` defaults to `20` and limits returned `usedIn` locations.
 
 Output when not found:
 
@@ -460,15 +471,21 @@ Input:
 ```json
 {
   "projectPath": "C:/absolute/path/to/react-project",
-  "componentName": "Button"
+  "componentName": "Button",
+  "locationLimit": 20
 }
 ```
+
+- `locationLimit` defaults to `20` and limits returned `usedIn` locations.
 
 Output when found:
 
 ```json
 {
-  "usageCount": 1,
+  "usageCount": 42,
+  "returned": 20,
+  "truncated": true,
+  "locationLimit": 20,
   "usedIn": [
     {
       "filePath": "C:/project/src/pages/Home.tsx",
@@ -503,7 +520,9 @@ Output includes:
 - `reason`: `no_known_external_usages` or
   `no_external_jsx_usages_but_has_known_references`
 - `usageKinds`: known non-JSX reference kinds found for the component
-- `references`: source locations for known non-JSX references
+- `referenceCount`: total known non-JSX references
+- `returnedReferences`: returned reference locations after `locationLimit`
+- `references`: compact source locations for known non-JSX references
 - `confidence`: `high`, `medium`, or `low`
 - `risk`: legacy alias for `confidence`
 
@@ -518,42 +537,59 @@ Input:
 
 ```json
 {
-  "projectPath": "C:/absolute/path/to/react-project"
+  "projectPath": "C:/absolute/path/to/react-project",
+  "limit": 20,
+  "offset": 0,
+  "locationLimit": 20,
+  "includeSourceText": false
 }
 ```
+
+- `limit` and `offset` page unused candidates.
+- `locationLimit` limits returned `references` per candidate. Use `0` for
+  counts only.
+- `includeSourceText` defaults to `false`; when `true`, reference locations
+  also include `text`.
 
 Output:
 
 ```json
-[
-  {
-    "name": "OldButton",
-    "path": "C:/project/src/components/OldButton.tsx",
-    "declaration": {
-      "filePath": "C:/project/src/components/OldButton.tsx",
-      "line": 4,
-      "column": 1
-    },
-    "props": [],
-    "exported": true,
-    "defaultExport": false,
-    "usageCount": 0,
-    "usedIn": [],
-    "reason": "no_external_jsx_usages_but_has_known_references",
-    "usageKinds": ["route_config_reference"],
-    "references": [
-      {
-        "filePath": "C:/project/src/routes.ts",
-        "line": 8,
-        "column": 16,
-        "kind": "route_config_reference",
-        "text": "OldButton"
-      }
-    ],
-    "confidence": "low",
-    "risk": "low"
-  }
-]
+{
+  "items": [
+    {
+      "name": "OldButton",
+      "path": "C:/project/src/components/OldButton.tsx",
+      "declaration": {
+        "filePath": "C:/project/src/components/OldButton.tsx",
+        "line": 4,
+        "column": 1
+      },
+      "props": [],
+      "exported": true,
+      "defaultExport": false,
+      "usageCount": 0,
+      "usedIn": [],
+      "reason": "no_external_jsx_usages_but_has_known_references",
+      "usageKinds": ["route_config_reference"],
+      "referenceCount": 1,
+      "returnedReferences": 1,
+      "references": [
+        {
+          "filePath": "C:/project/src/routes.ts",
+          "line": 8,
+          "column": 16,
+          "kind": "route_config_reference"
+        }
+      ],
+      "confidence": "low",
+      "risk": "low"
+    }
+  ],
+  "total": 42,
+  "returned": 20,
+  "truncated": true,
+  "nextOffset": 20
+}
 ```
 
 ### `get_component_dependencies`
@@ -821,6 +857,8 @@ npm test
 - Styled factories are detected syntactically; deep styled-components type metadata is not expanded.
 - Component lookup by `componentName` returns the first exact case-insensitive name match when multiple components share the same name.
 - Usage scanning excludes JSX usages inside the component's own declaration file.
+- Non-JSX reference kinds are heuristic; renamed `createElement` helpers or custom router APIs may fall back to `value_reference`.
+- `mode: "full"` with a large `limit` can return large `usedIn` arrays; prefer `summary`, `get_component_report`, or explicit pagination for broad scans.
 - Results depend on the target project's `tsconfig.json`.
 - The cache always uses `<projectPath>/tsconfig.json`; custom tsconfig paths are not supported.
 

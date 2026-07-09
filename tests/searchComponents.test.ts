@@ -527,6 +527,35 @@ test("gets one component with usages by exact name", async () => {
     assert.equal(component.usageCount, 4);
 });
 
+test("limits single component usage locations", async () => {
+    const usage = await findComponentUsages(fixturePath, "Button", {
+        locationLimit: 2,
+    });
+    const component = await getComponent(fixturePath, "Button", true, {
+        locationLimit: 1,
+    });
+
+    if ("found" in usage) {
+        assert.fail(usage.message);
+    }
+
+    if ("found" in component) {
+        assert.fail(component.message);
+    }
+
+    assert.equal(usage.usageCount, 4);
+    assert.equal(usage.returned, 2);
+    assert.equal(usage.usedIn.length, 2);
+    assert.equal(usage.truncated, true);
+    assert.equal(usage.locationLimit, 2);
+
+    assert.equal(component.usageCount, 4);
+    assert.equal(component.returned, 1);
+    assert.equal(component.usedIn.length, 1);
+    assert.equal(component.truncated, true);
+    assert.equal(component.locationLimit, 1);
+});
+
 test("returns a readable response for unknown component usage lookup", async () => {
     const usage = await findComponentUsages(fixturePath, "MissingComponent");
 
@@ -539,7 +568,10 @@ test("returns a readable response for unknown component usage lookup", async () 
 });
 
 test("finds components without external JSX usages", async () => {
-    const components = await findUnusedComponents(fixturePath);
+    const result = await findUnusedComponents(fixturePath, {
+        limit: 100,
+    });
+    const components = result.items;
     const names = components.map(component => component.name).sort();
     const unused = components.find(component => component.name === "Unused");
     const defaultPanel = components.find(component =>
@@ -552,6 +584,9 @@ test("finds components without external JSX usages", async () => {
     assert.ok(names.includes("Unused"));
     assert.ok(names.includes("LocalOnly"));
     assert.ok(!names.includes("Button"));
+    assert.equal(result.returned, components.length);
+    assert.equal(result.truncated, false);
+    assert.equal(result.nextOffset, null);
     assert.equal(unused?.reason, "no_known_external_usages");
     assert.equal(unused?.confidence, "medium");
     assert.equal(unused?.risk, "medium");
@@ -562,7 +597,11 @@ test("finds components without external JSX usages", async () => {
 });
 
 test("reports non-JSX references for unused component candidates", async () => {
-    const components = await findUnusedComponents(fixturePath);
+    const result = await findUnusedComponents(fixturePath, {
+        includeSourceText: true,
+        limit: 100,
+    });
+    const components = result.items;
     const cases = [
         ["CreateElementOnly", "react_create_element"],
         ["PropOnly", "value_reference"],
@@ -585,6 +624,8 @@ test("reports non-JSX references for unused component candidates", async () => {
         assert.equal(component.confidence, "low");
         assert.equal(component.risk, "low");
         assert.deepEqual(component.usageKinds, [expectedKind]);
+        assert.equal(component.referenceCount, 1);
+        assert.equal(component.returnedReferences, 1);
         assert.equal(component.references.length, 1);
         assert.equal(component.references[0]?.kind, expectedKind);
         assert.equal(component.references[0]?.text, componentName);
@@ -592,7 +633,10 @@ test("reports non-JSX references for unused component candidates", async () => {
 });
 
 test("reports lazy import references for unused component candidates", async () => {
-    const components = await findUnusedComponents(fixturePath);
+    const result = await findUnusedComponents(fixturePath, {
+        limit: 100,
+    });
+    const components = result.items;
     const namedPanel = components.find(component =>
         component.name === "NamedPanel"
     );
@@ -609,6 +653,42 @@ test("reports lazy import references for unused component candidates", async () 
             reference.kind === "lazy_import"
         )
     );
+});
+
+test("paginates unused candidates and limits reference locations", async () => {
+    const firstPage = await findUnusedComponents(fixturePath, {
+        limit: 1,
+    });
+    const countOnlyReferences = await findUnusedComponents(fixturePath, {
+        limit: 100,
+        locationLimit: 0,
+    });
+    const compactReferences = await findUnusedComponents(fixturePath, {
+        limit: 100,
+        locationLimit: 1,
+    });
+
+    const countOnlyRouteConfig = countOnlyReferences.items.find(component =>
+        component.name === "RouteConfigOnly"
+    );
+    const compactRouteConfig = compactReferences.items.find(component =>
+        component.name === "RouteConfigOnly"
+    );
+
+    assert.equal(firstPage.returned, 1);
+    assert.equal(firstPage.items.length, 1);
+    assert.ok(firstPage.total > 1);
+    assert.equal(firstPage.truncated, true);
+    assert.equal(firstPage.nextOffset, 1);
+
+    assert.equal(countOnlyRouteConfig?.referenceCount, 1);
+    assert.equal(countOnlyRouteConfig?.returnedReferences, 0);
+    assert.deepEqual(countOnlyRouteConfig?.references, []);
+
+    assert.equal(compactRouteConfig?.referenceCount, 1);
+    assert.equal(compactRouteConfig?.returnedReferences, 1);
+    assert.equal(compactRouteConfig?.references.length, 1);
+    assert.ok(!("text" in (compactRouteConfig?.references[0] ?? {})));
 });
 
 test("keeps non-JSX references out of usage tools", async () => {

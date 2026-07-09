@@ -46,9 +46,23 @@ const scanOptionsSchema = z.object({
     componentWrappers: z.array(z.string().trim().min(1)).optional(),
 });
 
-const outputOptionsSchema = z.object({
+const paginationOptionsSchema = z.object({
     limit: z.number().int().positive().default(DEFAULT_OUTPUT_LIMIT),
     offset: z.number().int().nonnegative().default(0),
+});
+
+const locationLimitOptionsSchema = z.object({
+    locationLimit: z.number()
+        .int()
+        .nonnegative()
+        .default(DEFAULT_REPORT_LOCATION_LIMIT),
+});
+
+const sourceTextOptionsSchema = z.object({
+    includeSourceText: z.boolean().default(false),
+});
+
+const outputOptionsSchema = paginationOptionsSchema.extend({
     mode: z.enum(componentOutputModes).default("summary"),
     fields: z.array(z.enum(componentOutputFields)).min(1).optional(),
 });
@@ -67,9 +81,19 @@ const componentNameSchema = projectPathSchema.extend({
     componentName: z.string().trim().min(1),
 });
 
-const getComponentSchema = componentNameSchema.extend({
-    includeUsages: z.boolean().default(true),
-});
+const getComponentSchema = componentNameSchema
+    .merge(locationLimitOptionsSchema)
+    .extend({
+        includeUsages: z.boolean().default(true),
+    });
+
+const findComponentUsagesSchema = componentNameSchema
+    .merge(locationLimitOptionsSchema);
+
+const findUnusedComponentsSchema = projectPathSchema
+    .merge(paginationOptionsSchema)
+    .merge(locationLimitOptionsSchema)
+    .merge(sourceTextOptionsSchema);
 
 const componentReportSchema = componentNameSchema.extend({
     locationLimit: z.number()
@@ -121,19 +145,42 @@ const projectPathInputSchema = {
     ...scanOptionsInputSchema,
 };
 
-const outputOptionsInputSchema = {
+const paginationOptionsInputSchema = {
     limit: {
         type: "integer",
         minimum: 1,
         default: DEFAULT_OUTPUT_LIMIT,
-        description: "Maximum number of components to return.",
+        description: "Maximum number of result items to return.",
     },
     offset: {
         type: "integer",
         minimum: 0,
         default: 0,
-        description: "Zero-based offset for paginated component results.",
+        description: "Zero-based offset for paginated results.",
     },
+};
+
+const locationLimitInputSchema = {
+    locationLimit: {
+        type: "integer",
+        minimum: 0,
+        default: DEFAULT_REPORT_LOCATION_LIMIT,
+        description:
+            "Maximum usage/reference locations to return per component.",
+    },
+};
+
+const sourceTextInputSchema = {
+    includeSourceText: {
+        type: "boolean",
+        default: false,
+        description:
+            "Whether compact reference locations include source text snippets.",
+    },
+};
+
+const outputOptionsInputSchema = {
+    ...paginationOptionsInputSchema,
     mode: {
         type: "string",
         enum: [...componentOutputModes],
@@ -270,6 +317,7 @@ server.setRequestHandler(
                                 "Whether to include JSX usage locations",
                             default: true,
                         },
+                        ...locationLimitInputSchema,
                     },
                     required: ["projectPath", "componentName"],
                 },
@@ -341,6 +389,7 @@ server.setRequestHandler(
                     type: "object",
                     properties: {
                         ...componentNameInputSchema,
+                        ...locationLimitInputSchema,
                     },
                     required: ["projectPath", "componentName"],
                 },
@@ -351,7 +400,12 @@ server.setRequestHandler(
                     "Find React components with no known external JSX usages and report confidence plus non-JSX references",
                 inputSchema: {
                     type: "object",
-                    properties: projectPathInputSchema,
+                    properties: {
+                        ...projectPathInputSchema,
+                        ...paginationOptionsInputSchema,
+                        ...locationLimitInputSchema,
+                        ...sourceTextInputSchema,
+                    },
                     required: ["projectPath"],
                 },
             },
@@ -442,7 +496,7 @@ server.setRequestHandler(
                     parsedArgs
                 );
             } else if (name === "find_component_usages") {
-                const parsedArgs = componentNameSchema.parse(args);
+                const parsedArgs = findComponentUsagesSchema.parse(args);
 
                 result = await findComponentUsages(
                     parsedArgs.projectPath,
@@ -450,7 +504,7 @@ server.setRequestHandler(
                     parsedArgs
                 );
             } else if (name === "find_unused_components") {
-                const parsedArgs = projectPathSchema.parse(args);
+                const parsedArgs = findUnusedComponentsSchema.parse(args);
 
                 result = await findUnusedComponents(
                     parsedArgs.projectPath,

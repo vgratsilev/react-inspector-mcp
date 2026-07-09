@@ -70,6 +70,20 @@ export interface ComponentReferenceLocation {
     text: string;
 }
 
+export interface ComponentReferenceSummaryLocation {
+    filePath: string;
+    line: number;
+    column: number;
+    kind: ComponentReferenceKind;
+    text?: string;
+}
+
+export interface LimitedComponentUsage extends ComponentUsage {
+    returned: number;
+    truncated: boolean;
+    locationLimit: number;
+}
+
 export type UnusedComponentConfidence = "low" | "medium" | "high";
 
 export type UnusedComponentRisk = UnusedComponentConfidence;
@@ -81,7 +95,9 @@ export type UnusedComponentReason =
 export interface UnusedComponentInfo extends FullComponentInfo {
     reason: UnusedComponentReason;
     usageKinds: ComponentReferenceKind[];
-    references: ComponentReferenceLocation[];
+    referenceCount: number;
+    returnedReferences: number;
+    references: ComponentReferenceSummaryLocation[];
     confidence: UnusedComponentConfidence;
     risk: UnusedComponentRisk;
 }
